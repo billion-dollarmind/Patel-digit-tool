@@ -9,8 +9,6 @@ import { analyzeOverUnder, getLastDigit } from '@/utils/predictions';
 import { AdvancedChart } from '@/components/AdvancedChart';
 import { PerformanceDashboard } from '@/components/PerformanceDashboard';
 import { RiskWarning } from '@/components/RiskWarning';
-import { MultiTimeframePanel } from '@/components/MultiTimeframePanel';
-import { SmartNotifications } from '@/components/SmartNotifications';
 import { SignalCountdown } from '@/components/SignalCountdown';
 import { Button } from '@/components/ui/button';
 
@@ -37,17 +35,15 @@ const OverUnderCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
   const { addPrediction, stats } = usePerformanceTracking();
   const { tickData } = useDerivWebSocket(); // Add this to access candle data
   const overUnderResult = useMemo(() => analyzeOverUnder(signalTicks), [signalTicks]);
-  // const { timeframeResults, consensus, isReady: mtfReady } = useMultiTimeframeAnalysis(ticks, 'overUnder');
-  const timeframeResults: any[] = [];
-  const consensus = { signal: 'NEUTRAL', confidence: 60, agreement: 50, dominantTimeframe: '10T', conflictingSignals: false };
-  const mtfReady = true;
-  const showSignal = phase === 'signal' && isReady && mtfReady;
+  const showSignal = phase === 'signal' && isReady;
 
-  // Live digit display
-  const lastDigits = ticks.slice(-10).map(t => ({
-    digit: getLastDigit(t.quote),
-    epoch: t.epoch
-  }));
+  // Live digit display - memoized to ensure re-rendering when ticks change
+  const lastDigits = useMemo(() => 
+    ticks.slice(-10).map(t => ({
+      digit: getLastDigit(t.quote),
+      epoch: t.epoch
+    })), [ticks]
+  );
 
   // Add prediction to tracking when signal becomes available
   useEffect(() => {
@@ -76,6 +72,7 @@ const OverUnderCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
         <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
           <span className="font-mono">{symbol}</span>
           <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-even animate-pulse' : 'bg-destructive'}`} />
+          <span className="text-xs">{isConnected ? 'Live' : 'Offline'}</span>
         </div>
       </div>
 
@@ -153,13 +150,6 @@ const OverUnderCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
             </div>
           </div>
 
-          {/* Multi-Timeframe Analysis */}
-          <MultiTimeframePanel 
-            timeframeResults={timeframeResults}
-            consensus={consensus}
-            analysisType="overUnder"
-          />
-
           {/* Advanced Chart */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -177,13 +167,22 @@ const OverUnderCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
           
           {/* Live digits */}
           <div className="space-y-3">
-            <div className="text-sm font-medium text-muted-foreground">Last 10 Digits (Live)</div>
+            <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
+              <span>Last 10 Digits (Live)</span>
+              <div className="text-xs space-x-2">
+                <span>Total: {ticks.length} ticks</span>
+                {ticks.length > 0 && (
+                  <span>Last: {new Date(ticks[ticks.length - 1].epoch * 1000).toLocaleTimeString()}</span>
+                )}
+              </div>
+            </div>
             <div className="flex gap-2 justify-center">
-              {lastDigits.map(({ digit, epoch }) => (
+              {lastDigits.map(({ digit, epoch }, index) => (
                 <motion.div
-                  key={epoch}
+                  key={`${symbol}-${epoch}-${index}`}
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: index * 0.05 }}
                   className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
                     digit >= 5 
                       ? 'bg-over/20 text-over border border-over/30' 
@@ -197,13 +196,6 @@ const OverUnderCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
           </div>
         </div>
       )}
-
-      {/* Smart Notifications */}
-      <SmartNotifications 
-        consensus={consensus}
-        symbol={symbol}
-        analysisType="overUnder"
-      />
     </motion.div>
   );
 };

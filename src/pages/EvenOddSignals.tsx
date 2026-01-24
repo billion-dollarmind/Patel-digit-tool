@@ -6,7 +6,6 @@ import { useDerivWebSocket } from '@/hooks/useDerivWebSocket';
 import { useSignalCycle } from '@/hooks/useSignalCycle';
 import { analyzeEvenOdd } from '@/utils/predictions';
 
-import { MultiTimeframePanel } from '@/components/MultiTimeframePanel';
 import { SignalCountdown } from '@/components/SignalCountdown';
 import { Button } from '@/components/ui/button';
 
@@ -31,10 +30,6 @@ interface SignalCardProps {
 const EvenOddCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
   const { phase, countdown, signalTicks, collectedCount, isReady } = useSignalCycle(ticks);
   const evenOddResult = useMemo(() => analyzeEvenOdd(signalTicks), [signalTicks]);
-  // const { timeframeResults, consensus, isReady: mtfReady } = useMultiTimeframeAnalysis(ticks, 'evenOdd');
-  const timeframeResults: any[] = [];
-  const consensus = { signal: 'NEUTRAL', confidence: 60, agreement: 50, dominantTimeframe: '10T', conflictingSignals: false };
-  const mtfReady = true;
   const showSignal = phase === 'signal' && isReady;
 
   // Live digit display - last 10 digits
@@ -118,13 +113,6 @@ const EvenOddCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
             </motion.div>
           </div>
 
-          {/* Multi-Timeframe Analysis */}
-          <MultiTimeframePanel 
-            timeframeResults={timeframeResults}
-            consensus={consensus}
-            analysisType="evenOdd"
-          />
-
           {/* Stats Summary Box */}
           <div className="rounded-xl p-4 bg-muted/10 border border-muted/30">
             <div className="text-sm font-medium mb-2 text-muted-foreground">Pattern Analysis</div>
@@ -147,11 +135,12 @@ const EvenOddCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
           <div className="space-y-3">
             <div className="text-sm font-medium text-muted-foreground">Last 10 Digits (Live)</div>
             <div className="flex gap-2 justify-center">
-              {lastDigits.map(({ digit, epoch, isEven }) => (
+              {lastDigits.map(({ digit, epoch, isEven }, index) => (
                 <motion.div
-                  key={epoch}
+                  key={`${symbol}-${epoch}-${index}`}
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: index * 0.05 }}
                   className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
                     isEven 
                       ? 'bg-even/20 text-even border border-even/30' 

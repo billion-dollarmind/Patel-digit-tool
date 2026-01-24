@@ -57,6 +57,7 @@ export const useDerivWebSocket = () => {
           
           // For each symbol, fetch both ticks and candlestick data
           SYMBOLS.forEach(symbol => {
+            console.log(`Subscribing to ${symbol}...`);
             // Fetch historical ticks (1000 ticks)
             ws.send(JSON.stringify({
               ticks_history: symbol,
@@ -145,6 +146,7 @@ export const useDerivWebSocket = () => {
             // Handle live tick updates
             if (data.tick && !data.tick.style) {
               const { symbol, quote, epoch } = data.tick;
+              console.log(`Live tick received for ${symbol}: ${quote} at ${epoch}`);
               
               setTickData(prev => {
                 const symbolData = prev[symbol] || { ticks: [], candles: [], isConnected: false };
@@ -217,14 +219,25 @@ export const useDerivWebSocket = () => {
 
         ws.onerror = (error) => {
           console.error('WebSocket error:', error);
+          setIsConnected(false);
         };
 
-        ws.onclose = () => {
-          console.log('WebSocket closed');
+        ws.onclose = (event) => {
+          console.log('WebSocket closed:', event.code, event.reason);
           setIsConnected(false);
+          
+          // Mark all symbols as disconnected
+          setTickData(prev => {
+            const updated = { ...prev };
+            Object.keys(updated).forEach(symbol => {
+              updated[symbol] = { ...updated[symbol], isConnected: false };
+            });
+            return updated;
+          });
           
           // Reconnect after 3 seconds
           reconnectTimeoutRef.current = setTimeout(() => {
+            console.log('Attempting to reconnect...');
             connect();
           }, 3000);
         };
