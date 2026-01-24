@@ -33,12 +33,13 @@ const EvenOddCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
   const showSignal = phase === 'signal' && isReady;
 
   // Live digit display - last 10 digits
-  const lastDigits = ticks.slice(-10).map(t => {
+  const lastDigits = ticks.slice(-10).map((t, index) => {
     const lastDigit = parseInt(t.quote.toFixed(4).slice(-1));
     return {
       digit: lastDigit,
       epoch: t.epoch,
-      isEven: lastDigit % 2 === 0
+      isEven: lastDigit % 2 === 0,
+      isNewest: index === ticks.slice(-10).length - 1
     };
   });
 
@@ -135,17 +136,22 @@ const EvenOddCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
           <div className="space-y-3">
             <div className="text-sm font-medium text-muted-foreground">Last 10 Digits (Live)</div>
             <div className="flex gap-2 justify-center">
-              {lastDigits.map(({ digit, epoch, isEven }, index) => (
+              {lastDigits.map(({ digit, epoch, isEven, isNewest }, index) => (
                 <motion.div
-                  key={`${symbol}-${epoch}-${index}`}
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ delay: index * 0.05 }}
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
+                  key={`${symbol}-${epoch}`}
+                  initial={isNewest ? { x: 20, scale: 0.8, opacity: 0 } : false}
+                  animate={{ x: 0, scale: 1, opacity: 1 }}
+                  transition={{ 
+                    type: "spring", 
+                    stiffness: 300, 
+                    damping: 25,
+                    duration: 0.3
+                  }}
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold transition-colors ${
                     isEven 
                       ? 'bg-even/20 text-even border border-even/30' 
                       : 'bg-odd/20 text-odd border border-odd/30'
-                  }`}
+                  } ${isNewest ? 'ring-2 ring-primary/50 ring-offset-1' : ''}`}
                 >
                   {digit}
                 </motion.div>

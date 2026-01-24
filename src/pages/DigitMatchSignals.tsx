@@ -33,9 +33,10 @@ const DigitMatchCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
   const showSignal = phase === 'signal' && isReady;
 
   // Live digit display
-  const lastDigits = ticks.slice(-10).map(t => ({
+  const lastDigits = ticks.slice(-10).map((t, index) => ({
     digit: getLastDigit(t.quote),
-    epoch: t.epoch
+    epoch: t.epoch,
+    isNewest: index === ticks.slice(-10).length - 1
   }));
 
   return (
@@ -140,17 +141,22 @@ const DigitMatchCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
           <div className="space-y-3">
             <div className="text-sm font-medium text-muted-foreground">Last 10 Digits (Live)</div>
             <div className="flex gap-2 justify-center">
-              {lastDigits.map(({ digit, epoch }, index) => (
+              {lastDigits.map(({ digit, epoch, isNewest }, index) => (
                 <motion.div
-                  key={`${symbol}-${epoch}-${index}`}
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ delay: index * 0.05 }}
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
+                  key={`${symbol}-${epoch}`}
+                  initial={isNewest ? { x: 20, scale: 0.8, opacity: 0 } : false}
+                  animate={{ x: 0, scale: 1, opacity: 1 }}
+                  transition={{ 
+                    type: "spring", 
+                    stiffness: 300, 
+                    damping: 25,
+                    duration: 0.3
+                  }}
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold transition-colors ${
                     digit === digitMatchResult.prediction 
                       ? 'bg-match/20 text-match border border-match/30 scale-110' 
                       : 'bg-muted/50 text-muted-foreground border border-muted/30'
-                  }`}
+                  } ${isNewest ? 'ring-2 ring-primary/50 ring-offset-1' : ''}`}
                 >
                   {digit}
                 </motion.div>
