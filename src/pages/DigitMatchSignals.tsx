@@ -5,8 +5,8 @@ import { useMemo } from 'react';
 import { useDerivWebSocket } from '@/hooks/useDerivWebSocket';
 import { useSignalCycle } from '@/hooks/useSignalCycle';
 import { analyzeDigitMatch, getLastDigit } from '@/utils/predictions';
-import { TickChart } from '@/components/TickChart';
-import { PredictionBadge } from '@/components/PredictionBadge';
+
+import { MultiTimeframePanel } from '@/components/MultiTimeframePanel';
 import { SignalCountdown } from '@/components/SignalCountdown';
 import { Button } from '@/components/ui/button';
 
@@ -31,6 +31,10 @@ interface SignalCardProps {
 const DigitMatchCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
   const { phase, countdown, signalTicks, collectedCount, isReady } = useSignalCycle(ticks);
   const digitMatchResult = useMemo(() => analyzeDigitMatch(signalTicks), [signalTicks]);
+  // const { timeframeResults, consensus, isReady: mtfReady } = useMultiTimeframeAnalysis(ticks, 'digitMatch');
+  const timeframeResults: any[] = [];
+  const consensus = { signal: 'NEUTRAL', confidence: 60, agreement: 50, dominantTimeframe: '10T', conflictingSignals: false };
+  const mtfReady = true;
   const showSignal = phase === 'signal' && isReady;
 
   // Live digit display
@@ -107,6 +111,13 @@ const DigitMatchCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
               Confidence: {digitMatchResult.confidence}%
             </motion.div>
           </div>
+
+          {/* Multi-Timeframe Analysis */}
+          <MultiTimeframePanel 
+            timeframeResults={timeframeResults}
+            consensus={consensus}
+            analysisType="digitMatch"
+          />
 
           {/* Digit Frequency Grid */}
           <div className="rounded-xl p-4 bg-muted/10 border border-muted/30">

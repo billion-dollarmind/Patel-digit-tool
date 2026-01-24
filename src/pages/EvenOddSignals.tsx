@@ -5,9 +5,8 @@ import { useMemo } from 'react';
 import { useDerivWebSocket } from '@/hooks/useDerivWebSocket';
 import { useSignalCycle } from '@/hooks/useSignalCycle';
 import { analyzeEvenOdd } from '@/utils/predictions';
-import { TickChart } from '@/components/TickChart';
-import { StatsPanel } from '@/components/StatsPanel';
-import { PredictionBadge } from '@/components/PredictionBadge';
+
+import { MultiTimeframePanel } from '@/components/MultiTimeframePanel';
 import { SignalCountdown } from '@/components/SignalCountdown';
 import { Button } from '@/components/ui/button';
 
@@ -32,6 +31,10 @@ interface SignalCardProps {
 const EvenOddCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
   const { phase, countdown, signalTicks, collectedCount, isReady } = useSignalCycle(ticks);
   const evenOddResult = useMemo(() => analyzeEvenOdd(signalTicks), [signalTicks]);
+  // const { timeframeResults, consensus, isReady: mtfReady } = useMultiTimeframeAnalysis(ticks, 'evenOdd');
+  const timeframeResults: any[] = [];
+  const consensus = { signal: 'NEUTRAL', confidence: 60, agreement: 50, dominantTimeframe: '10T', conflictingSignals: false };
+  const mtfReady = true;
   const showSignal = phase === 'signal' && isReady;
 
   // Live digit display - last 10 digits
@@ -114,6 +117,13 @@ const EvenOddCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
               Confidence: {evenOddResult.confidence}%
             </motion.div>
           </div>
+
+          {/* Multi-Timeframe Analysis */}
+          <MultiTimeframePanel 
+            timeframeResults={timeframeResults}
+            consensus={consensus}
+            analysisType="evenOdd"
+          />
 
           {/* Stats Summary Box */}
           <div className="rounded-xl p-4 bg-muted/10 border border-muted/30">

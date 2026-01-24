@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Tick } from '@/utils/predictions';
 
-const COLLECTION_TIME = 30; // 30 seconds to collect ticks
+const COLLECTION_TIME = 15; // 15 seconds to collect ticks
 const SIGNAL_TIME = 20; // 20 seconds to show signal
 
 type CyclePhase = 'collecting' | 'signal';
@@ -39,8 +39,8 @@ export const useSignalCycle = (ticks: Tick[]) => {
         const remaining = COLLECTION_TIME - elapsed;
         
         if (remaining <= 0) {
-          // Transition to signal phase - capture current ticks
-          ticksAtSignalRef.current = [...ticks].slice(-30);
+          // Transition to signal phase - capture current ticks (last 15 ticks)
+          ticksAtSignalRef.current = [...ticks].slice(-15);
           cycleStartRef.current = Date.now();
           setState({
             phase: 'signal',
@@ -75,8 +75,8 @@ export const useSignalCycle = (ticks: Tick[]) => {
   return {
     phase: state.phase,
     countdown: state.countdown,
-    signalTicks: state.phase === 'signal' ? state.signalTicks : ticks.slice(-30),
+    signalTicks: state.phase === 'signal' ? state.signalTicks : ticks.slice(-15),
     collectedCount: ticks.length,
-    isReady: state.phase === 'signal' && state.signalTicks.length >= 30,
+    isReady: state.phase === 'signal' && state.signalTicks.length >= 15,
   };
 };

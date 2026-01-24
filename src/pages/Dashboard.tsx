@@ -129,9 +129,9 @@ export const Dashboard = () => {
             How It Works
           </h3>
           <p className="text-sm text-muted-foreground">
-            Each signal type scans the market for <strong>30 seconds</strong> to collect tick data, 
+            Each signal type scans the market for <strong>15 seconds</strong> to collect tick data, 
             then displays a signal for <strong>20 seconds</strong> before scanning again. 
-            This cycle ensures you get fresh, accurate predictions based on the latest 30 ticks.
+            This cycle ensures you get fresh, accurate predictions based on the latest 15 ticks.
           </p>
         </motion.div>
       </main>

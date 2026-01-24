@@ -55,9 +55,9 @@ const calculateRecommendedRuns = (confidence: number): number => {
 
 // Even/Odd Analysis
 export const analyzeEvenOdd = (ticks: Tick[]): EvenOddResult | null => {
-  if (!ticks || ticks.length < 10) return null;
+  if (!ticks || ticks.length < 5) return null;
   
-  const digits = ticks.slice(-30).map(t => getLastDigit(t.quote));
+  const digits = ticks.slice(-15).map(t => getLastDigit(t.quote));
   const evenCount = digits.filter(d => d % 2 === 0).length;
   const oddCount = digits.length - evenCount;
   
@@ -80,13 +80,13 @@ const generateEntryPattern = (
   digits: number[], 
   digitCounts: Record<number, number>
 ): { entryPattern: string; entryDigits: number[]; waitForPattern: boolean } => {
-  const lastFive = digits.slice(-5);
+  const lastThree = digits.slice(-3); // Use last 3 instead of 5 for smaller dataset
   const OVER_RANGE = [5, 6, 7, 8, 9];
   const UNDER_RANGE = [0, 1, 2, 3, 4];
   
   if (prediction === 'OVER') {
-    // For OVER: Wait for 2-3 consecutive UNDER digits before entering
-    const consecutiveUnder = lastFive.filter(d => UNDER_RANGE.includes(d)).length;
+    // For OVER: Wait for 2+ consecutive UNDER digits before entering
+    const consecutiveUnder = lastThree.filter(d => UNDER_RANGE.includes(d)).length;
     const bestEntryDigits = UNDER_RANGE
       .map(d => ({ digit: d, count: digitCounts[d] || 0 }))
       .sort((a, b) => b.count - a.count)
@@ -106,8 +106,8 @@ const generateEntryPattern = (
       waitForPattern: true
     };
   } else {
-    // For UNDER: Wait for 2-3 consecutive OVER digits before entering
-    const consecutiveOver = lastFive.filter(d => OVER_RANGE.includes(d)).length;
+    // For UNDER: Wait for 2+ consecutive OVER digits before entering
+    const consecutiveOver = lastThree.filter(d => OVER_RANGE.includes(d)).length;
     const bestEntryDigits = OVER_RANGE
       .map(d => ({ digit: d, count: digitCounts[d] || 0 }))
       .sort((a, b) => b.count - a.count)
@@ -130,10 +130,13 @@ const generateEntryPattern = (
 };
 
 // Over/Under Analysis
+// Barrier Limits:
+// - UNDER signals: minimum barrier 3, maximum barrier 6 (no under 1 or under 2)
+// - OVER signals: minimum barrier 4, maximum barrier 7 (inverse of under limits)
 export const analyzeOverUnder = (ticks: Tick[]): OverUnderResult | null => {
-  if (!ticks || ticks.length < 10) return null;
+  if (!ticks || ticks.length < 5) return null;
   
-  const digits = ticks.slice(-30).map(t => getLastDigit(t.quote));
+  const digits = ticks.slice(-15).map(t => getLastDigit(t.quote));
   const OVER_RANGE = [5, 6, 7, 8, 9];
   const UNDER_RANGE = [0, 1, 2, 3, 4];
   
@@ -149,7 +152,7 @@ export const analyzeOverUnder = (ticks: Tick[]): OverUnderResult | null => {
   const totalRelevant = overCount + underCount;
   if (totalRelevant === 0) {
     const prediction: 'OVER' | 'UNDER' = Math.random() > 0.5 ? 'OVER' : 'UNDER';
-    const digit = prediction === 'OVER' ? 7 : 2; // Safe defaults
+    const digit = prediction === 'OVER' ? 5 : 4; // Safe defaults within new limits
     const { entryPattern, entryDigits, waitForPattern } = generateEntryPattern(prediction, digits, digitCounts);
     return {
       prediction,
@@ -169,24 +172,24 @@ export const analyzeOverUnder = (ticks: Tick[]): OverUnderResult | null => {
   
   if (overRatio > 0.55) {
     prediction = 'OVER';
-    // Find most frequent OVER digit, but barrier can't exceed 8
+    // Find most frequent OVER digit, with barrier limits: min 4, max 7
     const overDigits = OVER_RANGE.map(d => ({ digit: d, count: digitCounts[d] || 0 }));
     overDigits.sort((a, b) => b.count - a.count);
     const mostFrequent = overDigits[0].digit;
-    // Barrier logic: if most frequent is 9, use barrier 8; otherwise use the digit itself as barrier
-    digit = mostFrequent === 9 ? 8 : Math.min(mostFrequent, 8);
+    // OVER barrier limits: minimum 4, maximum 7
+    digit = Math.max(4, Math.min(7, mostFrequent));
   } else if (overRatio < 0.45) {
     prediction = 'UNDER';
-    // Find most frequent UNDER digit, but barrier can't be below 1
+    // Find most frequent UNDER digit, with barrier limits: min 3, max 6
     const underDigits = UNDER_RANGE.map(d => ({ digit: d, count: digitCounts[d] || 0 }));
     underDigits.sort((a, b) => b.count - a.count);
     const mostFrequent = underDigits[0].digit;
-    // Barrier logic: if most frequent is 0, use barrier 1; otherwise use the digit itself as barrier
-    digit = mostFrequent === 0 ? 1 : Math.max(mostFrequent, 1);
+    // UNDER barrier limits: minimum 3, maximum 6 (no under 1 or under 2)
+    digit = Math.max(3, Math.min(6, mostFrequent));
   } else {
-    // Neutral - pick based on slight lean with safe barriers
+    // Neutral - pick based on slight lean with safe barriers within limits
     prediction = overRatio >= 0.5 ? 'OVER' : 'UNDER';
-    digit = prediction === 'OVER' ? 7 : 2; // Safe middle barriers
+    digit = prediction === 'OVER' ? 5 : 4; // Safe middle barriers within new limits
   }
   
   const difference = Math.abs(overCount - underCount);
@@ -209,9 +212,9 @@ export const analyzeOverUnder = (ticks: Tick[]): OverUnderResult | null => {
 
 // Digit Match Analysis
 export const analyzeDigitMatch = (ticks: Tick[]): DigitMatchResult | null => {
-  if (!ticks || ticks.length < 10) return null;
+  if (!ticks || ticks.length < 5) return null;
   
-  const digits = ticks.slice(-30).map(t => getLastDigit(t.quote));
+  const digits = ticks.slice(-15).map(t => getLastDigit(t.quote));
   const frequency: Record<number, number> = {};
   
   digits.forEach(d => {

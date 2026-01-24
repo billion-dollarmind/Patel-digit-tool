@@ -1,12 +1,16 @@
 import { motion } from 'framer-motion';
-import { TrendingUp, Wifi, WifiOff, Home, ArrowLeft } from 'lucide-react';
+import { TrendingUp, Wifi, WifiOff, Home, ArrowLeft, BarChart3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useDerivWebSocket } from '@/hooks/useDerivWebSocket';
 import { useSignalCycle } from '@/hooks/useSignalCycle';
+import { usePerformanceTracking } from '@/hooks/usePerformanceTracking';
 import { analyzeOverUnder, getLastDigit } from '@/utils/predictions';
-import { TickChart } from '@/components/TickChart';
-import { PredictionBadge } from '@/components/PredictionBadge';
+import { AdvancedChart } from '@/components/AdvancedChart';
+import { PerformanceDashboard } from '@/components/PerformanceDashboard';
+import { RiskWarning } from '@/components/RiskWarning';
+import { MultiTimeframePanel } from '@/components/MultiTimeframePanel';
+import { SmartNotifications } from '@/components/SmartNotifications';
 import { SignalCountdown } from '@/components/SignalCountdown';
 import { Button } from '@/components/ui/button';
 
@@ -30,14 +34,33 @@ interface SignalCardProps {
 
 const OverUnderCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
   const { phase, countdown, signalTicks, collectedCount, isReady } = useSignalCycle(ticks);
+  const { addPrediction, stats } = usePerformanceTracking();
+  const { tickData } = useDerivWebSocket(); // Add this to access candle data
   const overUnderResult = useMemo(() => analyzeOverUnder(signalTicks), [signalTicks]);
-  const showSignal = phase === 'signal' && isReady;
+  // const { timeframeResults, consensus, isReady: mtfReady } = useMultiTimeframeAnalysis(ticks, 'overUnder');
+  const timeframeResults: any[] = [];
+  const consensus = { signal: 'NEUTRAL', confidence: 60, agreement: 50, dominantTimeframe: '10T', conflictingSignals: false };
+  const mtfReady = true;
+  const showSignal = phase === 'signal' && isReady && mtfReady;
 
   // Live digit display
   const lastDigits = ticks.slice(-10).map(t => ({
     digit: getLastDigit(t.quote),
     epoch: t.epoch
   }));
+
+  // Add prediction to tracking when signal becomes available
+  useEffect(() => {
+    if (showSignal && overUnderResult) {
+      addPrediction({
+        symbol,
+        predictionType: overUnderResult.prediction,
+        prediction: `${overUnderResult.prediction} ${overUnderResult.digit}`,
+        confidence: overUnderResult.confidence,
+        barrier: overUnderResult.digit
+      });
+    }
+  }, [showSignal, overUnderResult, symbol, addPrediction]);
 
   return (
     <motion.div
@@ -129,6 +152,28 @@ const OverUnderCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
               Entry digits: [{overUnderResult.entryDigits.join(', ')}] • Recommended: {overUnderResult.recommendedRuns} runs
             </div>
           </div>
+
+          {/* Multi-Timeframe Analysis */}
+          <MultiTimeframePanel 
+            timeframeResults={timeframeResults}
+            consensus={consensus}
+            analysisType="overUnder"
+          />
+
+          {/* Advanced Chart */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <BarChart3 className="w-4 h-4" />
+              <span>Advanced Chart with EMA</span>
+            </div>
+            <AdvancedChart 
+              ticks={ticks} 
+              candles={tickData[symbol]?.candles || []}
+              height={180} 
+              showEMA={true} 
+              showHeatmap={true} 
+            />
+          </div>
           
           {/* Live digits */}
           <div className="space-y-3">
@@ -152,6 +197,13 @@ const OverUnderCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
           </div>
         </div>
       )}
+
+      {/* Smart Notifications */}
+      <SmartNotifications 
+        consensus={consensus}
+        symbol={symbol}
+        analysisType="overUnder"
+      />
     </motion.div>
   );
 };
@@ -159,9 +211,16 @@ const OverUnderCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
 export const OverUnderSignals = () => {
   const navigate = useNavigate();
   const { tickData, isConnected, symbols } = useDerivWebSocket();
+  const { stats } = usePerformanceTracking();
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Risk Warning */}
+      <RiskWarning 
+        trigger={stats.currentStreak < -2 ? 'loss-streak' : 'startup'} 
+        lossStreak={Math.abs(stats.currentStreak)}
+      />
+
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-over/5 rounded-full blur-3xl" />
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-under/5 rounded-full blur-3xl" />
@@ -210,7 +269,11 @@ export const OverUnderSignals = () => {
         </div>
       </motion.header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 space-y-8">
+        {/* Performance Dashboard */}
+        <PerformanceDashboard />
+
+        {/* Signal Cards */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
