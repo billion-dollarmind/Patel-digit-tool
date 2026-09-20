@@ -1,128 +1,124 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  /* Light palette (when .dark is removed) */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 210 40% 98%;
+    --foreground: 222 28% 8%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 222 28% 8%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 222 28% 8%;
 
-    --primary: 217 91% 60%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 187 85% 38%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 270 60% 60%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 280 50% 48%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 210 40% 98%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 210 30% 94%;
+    --muted-foreground: 215 16% 40%;
 
-    --accent: 210 40% 98%;
-    --accent-foreground: 222.2 84% 4.9%;
+    --accent: 187 40% 92%;
+    --accent-foreground: 187 85% 28%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 84% 55%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 217 91% 60%;
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 187 85% 38%;
 
     --radius: 0.75rem;
 
-    /* Custom colors for predictions */
-    --even: 142 76% 50%;
+    --even: 158 70% 38%;
     --even-foreground: 0 0% 100%;
-    --odd: 270 60% 60%;
-    --odd-foreground: 210 40% 98%;
-    --over: 160 84% 39%;
+    --odd: 292 55% 48%;
+    --odd-foreground: 0 0% 100%;
+    --over: 172 70% 34%;
     --over-foreground: 0 0% 100%;
-    --under: 0 84% 60%;
-    --under-foreground: 210 40% 98%;
-    --match: 25 95% 53%;
+    --under: 350 75% 50%;
+    --under-foreground: 0 0% 100%;
+    --match: 28 90% 48%;
     --match-foreground: 0 0% 100%;
 
-    /* Glass effect */
     --glass: 0 0% 100%;
-    --glass-border: 214.3 31.8% 91.4%;
+    --glass-border: 187 25% 80%;
 
-    /* Chart colors */
-    --chart-line: 217 91% 60%;
-    --chart-grid: 214.3 31.8% 91.4%;
+    --chart-line: 187 85% 38%;
+    --chart-grid: 214 20% 88%;
 
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 222.2 84% 4.9%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 210 40% 98%;
-    --sidebar-accent-foreground: 222.2 84% 4.9%;
-    --sidebar-border: 214.3 31.8% 91.4%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-foreground: 222 28% 8%;
+    --sidebar-primary: 187 85% 38%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 30% 96%;
+    --sidebar-accent-foreground: 222 28% 8%;
+    --sidebar-border: 214 20% 88%;
+    --sidebar-ring: 187 85% 38%;
   }
 
+  /* Primary dark AI theme (defaultTheme="dark") */
   .dark {
-    --background: 220 20% 6%;
+    --background: 222 28% 5%;
     --foreground: 210 40% 98%;
 
-    --card: 220 18% 10%;
+    --card: 222 24% 8%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 220 18% 10%;
+    --popover: 222 24% 8%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 217 91% 60%;
-    --primary-foreground: 220 20% 6%;
+    --primary: 187 92% 52%;
+    --primary-foreground: 222 28% 6%;
 
-    --secondary: 270 60% 60%;
+    --secondary: 280 55% 58%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 220 15% 18%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 222 18% 14%;
+    --muted-foreground: 215 16% 68%;
 
-    --accent: 270 60% 60%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 187 70% 18%;
+    --accent-foreground: 187 92% 70%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 220 15% 20%;
-    --input: 220 15% 20%;
-    --ring: 217 91% 60%;
+    --border: 222 16% 18%;
+    --input: 222 16% 18%;
+    --ring: 187 92% 52%;
 
-    /* Custom colors for predictions */
-    --even: 142 76% 50%;
-    --even-foreground: 220 20% 6%;
-    --odd: 270 60% 60%;
+    --even: 158 84% 48%;
+    --even-foreground: 222 28% 6%;
+    --odd: 292 70% 62%;
     --odd-foreground: 210 40% 98%;
-    --over: 160 84% 39%;
-    --over-foreground: 220 20% 6%;
-    --under: 0 84% 60%;
+    --over: 172 80% 42%;
+    --over-foreground: 222 28% 6%;
+    --under: 350 80% 58%;
     --under-foreground: 210 40% 98%;
-    --match: 25 95% 53%;
-    --match-foreground: 220 20% 6%;
+    --match: 28 95% 55%;
+    --match-foreground: 222 28% 6%;
 
-    /* Glass effect */
-    --glass: 220 18% 12%;
-    --glass-border: 220 15% 25%;
+    --glass: 222 24% 10%;
+    --glass-border: 187 40% 28%;
 
-    /* Chart colors */
-    --chart-line: 217 91% 60%;
-    --chart-grid: 220 15% 20%;
+    --chart-line: 187 92% 52%;
+    --chart-grid: 222 16% 18%;
 
-    --sidebar-background: 220 20% 6%;
+    --sidebar-background: 222 28% 5%;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 220 20% 6%;
-    --sidebar-accent: 220 18% 15%;
+    --sidebar-primary: 187 92% 52%;
+    --sidebar-primary-foreground: 222 28% 6%;
+    --sidebar-accent: 222 18% 12%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 220 15% 20%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-border: 222 16% 18%;
+    --sidebar-ring: 187 92% 52%;
   }
 }
 
@@ -131,9 +127,17 @@
     @apply border-border;
   }
 
+  html.dark {
+    color-scheme: dark;
+  }
+
+  html:not(.dark) {
+    color-scheme: light;
+  }
+
   body {
-    @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Inter', system-ui, sans-serif;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Outfit', system-ui, sans-serif;
   }
 
   code, .font-mono {
@@ -143,11 +147,11 @@
 
 @layer utilities {
   .glass {
-    @apply bg-glass/80 backdrop-blur-xl border border-glass-border;
+    @apply bg-glass/75 backdrop-blur-xl border border-glass-border/80;
   }
 
   .gradient-text {
-    @apply bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-cyan-300 via-primary to-fuchsia-400 bg-clip-text text-transparent;
   }
 
   .gradient-border {

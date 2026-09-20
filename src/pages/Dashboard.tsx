@@ -1,61 +1,59 @@
 import { motion } from 'framer-motion';
-import { Calculator, Wifi, WifiOff, Home, TrendingUp, Hash, SquareStack } from 'lucide-react';
+import { ArrowRight, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { InstallPrompt } from '@/components/InstallPrompt';
+import { useAuth } from '@/hooks/useAuth';
+import { BrandLogo, SiteBackground } from '@/components/Brand';
+
+const featuredSignals = [
+  {
+    title: 'Even/Odd Signals',
+    description: 'Predict whether the last digit will be even or odd from live pattern analysis.',
+    route: '/signals/even-odd',
+    image: '/images/even-odd-hero.png',
+    accent: 'from-cyan-500/40 via-transparent to-fuchsia-500/30',
+    glow: 'shadow-cyan-500/20 hover:shadow-cyan-400/40',
+  },
+  {
+    title: 'Over/Under Signals',
+    description: 'Predict high (5–9) or low (0–4) digits with recommended entry runs.',
+    route: '/signals/over-under',
+    image: '/images/over-under-hero.png',
+    accent: 'from-sky-400/30 via-transparent to-blue-600/20',
+    glow: 'shadow-sky-500/20 hover:shadow-sky-400/40',
+  },
+  {
+    title: 'Digit Match Signals',
+    description: 'Identify the most frequent digit for match predictions across all indices.',
+    route: '/signals/digit-match',
+    image: '/images/digit-match-hero.png',
+    accent: 'from-amber-500/35 via-transparent to-orange-600/25',
+    glow: 'shadow-amber-500/20 hover:shadow-amber-400/40',
+  },
+];
 
 export const Dashboard = () => {
   const navigate = useNavigate();
-
-  const signalTypes = [
-    {
-      title: 'Even/Odd Signals',
-      description: 'Predict whether the last digit will be even or odd based on pattern analysis',
-      icon: SquareStack,
-      route: '/signals/even-odd',
-      gradient: 'from-even to-odd',
-      bgGlow: 'bg-even/10'
-    },
-    {
-      title: 'Over/Under Signals',
-      description: 'Predict high (5-9) or low (0-4) digits with recommended entry runs',
-      icon: TrendingUp,
-      route: '/signals/over-under',
-      gradient: 'from-over to-under',
-      bgGlow: 'bg-over/10'
-    },
-    {
-      title: 'Digit Match Signals',
-      description: 'Identify the most frequently occurring digit for match predictions',
-      icon: Hash,
-      route: '/signals/digit-match',
-      gradient: 'from-match to-primary',
-      bgGlow: 'bg-match/10'
-    }
-  ];
+  const { logout } = useAuth();
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Background Effects */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-secondary/5 rounded-full blur-3xl" />
-      </div>
+    <div className="relative min-h-screen">
+      <InstallPrompt />
+      <SiteBackground variant="main" />
 
-      {/* Header */}
       <motion.header
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="sticky top-0 z-50 glass border-b border-border"
+        className="sticky top-0 z-50 glass border-b border-border/60"
       >
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-500/20 backdrop-blur-sm border border-blue-500/30 flex items-center justify-center shadow-lg shadow-blue-500/20">
-                <Calculator className="w-5 h-5 text-blue-400" />
-              </div>
+              <BrandLogo size="md" />
               <div>
-                <h1 className="text-lg font-bold text-foreground">Patel Digit Tool</h1>
+                <h1 className="text-lg font-bold gradient-text">Patel Digit Tool</h1>
                 <p className="text-xs text-muted-foreground">Choose Your Signal Type</p>
               </div>
             </div>
@@ -65,73 +63,86 @@ export const Dashboard = () => {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigate('/')}
+                onClick={logout}
                 className="text-muted-foreground hover:text-foreground"
               >
-                <Home className="w-4 h-4 mr-2" />
-                Home
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
               </Button>
             </div>
           </div>
         </div>
       </motion.header>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-12">
+      <main className="relative container mx-auto px-4 py-10 md:py-14">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-12"
+          className="text-center mb-10 md:mb-14"
         >
-          <h2 className="text-3xl font-bold text-foreground mb-3">Select Signal Type</h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-3 tracking-tight">
+            Select Signal Type
+          </h2>
           <p className="text-muted-foreground max-w-lg mx-auto">
-            Choose the prediction type you want to analyze. Each page shows real-time signals 
-            for all 5 volatility indices with a 30s scan and 20s signal window.
+            Real-time AI-assisted predictions across volatility indices — 15s scan, 20s signal window.
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-          {signalTypes.map((signal, index) => (
-            <motion.div
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 max-w-6xl mx-auto">
+          {featuredSignals.map((signal, index) => (
+            <motion.button
               key={signal.route}
-              initial={{ opacity: 0, y: 20 }}
+              type="button"
+              initial={{ opacity: 0, y: 28 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 * index }}
+              transition={{ delay: 0.12 * index, duration: 0.5 }}
+              whileHover={{ y: -6 }}
+              whileTap={{ scale: 0.985 }}
               onClick={() => navigate(signal.route)}
-              className="glass rounded-2xl p-6 cursor-pointer hover:scale-105 transition-transform duration-300 group"
+              className={`group relative overflow-hidden rounded-3xl text-left border border-white/10 shadow-2xl ${signal.glow} transition-shadow duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
             >
-              <div className="w-16 h-16 rounded-2xl bg-teal-500/20 backdrop-blur-sm border border-teal-500/30 flex items-center justify-center mb-4 mx-auto group-hover:scale-110 transition-transform shadow-lg shadow-teal-500/20">
-                <signal.icon className="w-8 h-8 text-teal-400" />
+              <div className="relative aspect-[4/3] overflow-hidden">
+                <motion.img
+                  src={signal.image}
+                  alt={signal.title}
+                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  initial={{ scale: 1.08, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.15 * index, duration: 0.7 }}
+                />
+                <div className={`absolute inset-0 bg-gradient-to-br ${signal.accent}`} />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+
+                <div className="absolute inset-x-0 bottom-0 p-5 sm:p-6">
+                  <h3 className="text-xl sm:text-2xl font-bold text-white mb-1.5 drop-shadow-sm">
+                    {signal.title}
+                  </h3>
+                  <p className="text-sm text-white/75 mb-4 max-w-md leading-relaxed">
+                    {signal.description}
+                  </p>
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold text-white/95 group-hover:gap-3 transition-all">
+                    View Signals
+                    <ArrowRight className="w-4 h-4" />
+                  </span>
+                </div>
               </div>
-              <h3 className="text-xl font-bold text-foreground mb-2 text-center">
-                {signal.title}
-              </h3>
-              <p className="text-sm text-muted-foreground text-center">
-                {signal.description}
-              </p>
-              <div className="mt-4 flex justify-center">
-                <span className="text-xs text-primary font-medium group-hover:underline">
-                  View Signals →
-                </span>
-              </div>
-            </motion.div>
+            </motion.button>
           ))}
         </div>
 
-        {/* Info Banner */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="mt-12 glass rounded-2xl p-6 text-center max-w-2xl mx-auto"
+          className="mt-10 glass rounded-2xl p-6 text-center max-w-2xl mx-auto"
         >
           <h3 className="text-lg font-semibold text-foreground mb-2">
             How It Works
           </h3>
           <p className="text-sm text-muted-foreground">
-            Each signal type scans the market for <strong>15 seconds</strong> to collect tick data, 
-            then displays a signal for <strong>20 seconds</strong> before scanning again. 
-            This cycle ensures you get fresh, accurate predictions based on the latest 15 ticks.
+            Each signal type scans the market for <strong>15 seconds</strong> to collect tick data,
+            then displays a signal for <strong>20 seconds</strong> before scanning again.
+            This cycle keeps predictions fresh from the latest ticks.
           </p>
         </motion.div>
       </main>

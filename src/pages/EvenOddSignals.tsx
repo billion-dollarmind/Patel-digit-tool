@@ -1,25 +1,19 @@
 import { motion } from 'framer-motion';
-import { Activity, Wifi, WifiOff, Home, ArrowLeft } from 'lucide-react';
+import { Wifi, WifiOff, Home, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useMemo } from 'react';
 import { useDerivWebSocket } from '@/hooks/useDerivWebSocket';
 import { useSignalCycle } from '@/hooks/useSignalCycle';
-import { analyzeEvenOdd } from '@/utils/predictions';
-
-import { SignalCountdown } from '@/components/SignalCountdown';
+import { analyzeEvenOdd, getLastDigit } from '@/utils/predictions';
 import { Button } from '@/components/ui/button';
-
-const symbolNames: Record<string, string> = {
-  R_10: 'Volatility 10',
-  R_25: 'Volatility 25',
-  R_50: 'Volatility 50',
-  R_75: 'Volatility 75',
-  R_100: 'Volatility 100',
-  '1HZ10V': 'Volatility 10 (1s)',
-  '1HZ25V': 'Volatility 25 (1s)',
-  '1HZ50V': 'Volatility 50 (1s)',
-  '1HZ100V': 'Volatility 100 (1s)'
-};
+import { BrandLogo, SiteBackground } from '@/components/Brand';
+import {
+  AnalyzingState,
+  CompactSignal,
+  LiveDigitsRow,
+  SignalCardShell,
+  signalsGridClass,
+} from '@/components/SignalCard';
 
 interface SignalCardProps {
   symbol: string;
@@ -28,139 +22,69 @@ interface SignalCardProps {
 }
 
 const EvenOddCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
-  const { phase, countdown, signalTicks, collectedCount, isReady } = useSignalCycle(ticks);
+  const { phase, countdown, signalTicks, collectedCount, isReady, liveCycleTicks, cycleId, scanDuration } =
+    useSignalCycle(ticks, symbol);
   const evenOddResult = useMemo(() => analyzeEvenOdd(signalTicks), [signalTicks]);
   const showSignal = phase === 'signal' && isReady;
 
-  // Live digit display - last 10 digits
-  const lastDigits = ticks.slice(-10).map((t, index) => {
-    const lastDigit = parseInt(t.quote.toFixed(4).slice(-1));
-    return {
-      digit: lastDigit,
-      epoch: t.epoch,
-      isEven: lastDigit % 2 === 0,
-      isNewest: index === ticks.slice(-10).length - 1
-    };
-  });
+  const lastDigits = useMemo(
+    () =>
+      liveCycleTicks.map((t, index, arr) => {
+        const digit = getLastDigit(t.quote);
+        const isEven = digit % 2 === 0;
+        return {
+          digit,
+          epoch: t.epoch,
+          isNewest: index === arr.length - 1,
+          className: isEven
+            ? 'bg-even/20 text-even border-even/35'
+            : 'bg-odd/20 text-odd border-odd/35',
+        };
+      }),
+    [liveCycleTicks]
+  );
+
+  const evenPct = evenOddResult
+    ? Math.round((evenOddResult.evenCount / Math.max(evenOddResult.total, 1)) * 100)
+    : 0;
+  const oddPct = 100 - evenPct;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="glass rounded-2xl p-6 space-y-6 text-center"
-    >
-      {/* Header */}
-      <div className="space-y-1">
-        <h3 className="text-lg font-bold text-foreground uppercase tracking-wide">
-          {symbolNames[symbol] || symbol}
-        </h3>
-        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-          <span className="font-mono">{symbol}</span>
-          <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-even animate-pulse' : 'bg-destructive'}`} />
-        </div>
-      </div>
-
+    <SignalCardShell symbol={symbol} isConnected={isConnected} accent="even-odd">
       {!showSignal ? (
-        <div className="flex flex-col items-center justify-center py-12 space-y-4">
-          {/* Countdown Display */}
-          <SignalCountdown phase={phase} countdown={countdown} collectedCount={collectedCount} />
-          
-          <div className="w-32 h-32 rounded-full border-4 border-muted border-t-even animate-spin" />
-          <div className="space-y-1">
-            <div className="text-lg font-bold text-foreground">ANALYZING</div>
-            <div className="text-sm text-muted-foreground">Signal ready in {countdown}s</div>
-          </div>
-        </div>
-      ) : evenOddResult && (
-        <div className="space-y-6">
-          {/* Large Circular Prediction */}
-          <div className="flex flex-col items-center space-y-4">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", duration: 0.6 }}
-              className={`w-40 h-40 rounded-full flex items-center justify-center shadow-2xl ${
-                evenOddResult.prediction === 'EVEN' 
-                  ? 'bg-gradient-to-br from-even to-even/80' 
-                  : 'bg-gradient-to-br from-odd to-odd/80'
-              } ${evenOddResult.confidence > 75 ? 'animate-pulse' : ''}`}
-            >
-              <div className="text-4xl font-black text-white tracking-wider">
-                {evenOddResult.prediction}
+        <>
+          <AnalyzingState countdown={countdown} collectedCount={collectedCount} scanDuration={scanDuration} />
+          <LiveDigitsRow digits={lastDigits} symbol={symbol} cycleId={cycleId} />
+        </>
+      ) : evenOddResult ? (
+        <>
+          <CompactSignal
+            label={evenOddResult.prediction}
+            confidence={evenOddResult.confidence}
+            toneClass={
+              evenOddResult.prediction === 'EVEN'
+                ? 'bg-gradient-to-br from-even to-emerald-600'
+                : 'bg-gradient-to-br from-odd to-fuchsia-600'
+            }
+            pulse={evenOddResult.confidence > 75}
+            stats={
+              <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] min-w-0">
+                <span className="text-even font-bold whitespace-nowrap">{evenPct}% E</span>
+                <div className="hidden sm:flex w-16 h-1 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full bg-even" style={{ width: `${evenPct}%` }} />
+                  <div className="h-full bg-odd" style={{ width: `${oddPct}%` }} />
+                </div>
+                <span className="text-odd font-bold whitespace-nowrap">{oddPct}% O</span>
+                <span className="text-muted-foreground font-mono hidden md:inline">
+                  {evenOddResult.total}t
+                </span>
               </div>
-            </motion.div>
-
-            {/* Entry Now Indicator */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="flex items-center gap-2 text-2xl font-bold text-even"
-            >
-              <span>ENTRY NOW</span>
-              <div className="w-6 h-6 rounded-full bg-gradient-to-r from-pink-500 to-red-500 flex items-center justify-center">
-                <div className="w-3 h-3 bg-white rounded-full" />
-              </div>
-            </motion.div>
-
-            {/* Confidence */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              className="text-2xl font-bold text-even"
-            >
-              Confidence: {evenOddResult.confidence}%
-            </motion.div>
-          </div>
-
-          {/* Stats Summary Box */}
-          <div className="rounded-xl p-4 bg-muted/10 border border-muted/30">
-            <div className="text-sm font-medium mb-2 text-muted-foreground">Pattern Analysis</div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="text-center">
-                <div className="text-lg font-bold text-even">{evenOddResult.evenCount}</div>
-                <div className="text-muted-foreground">Even</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-bold text-odd">{evenOddResult.oddCount}</div>
-                <div className="text-muted-foreground">Odd</div>
-              </div>
-            </div>
-            <div className="text-center mt-2 text-xs text-muted-foreground">
-              Total: {evenOddResult.total} ticks analyzed
-            </div>
-          </div>
-          
-          {/* Live digits */}
-          <div className="space-y-3">
-            <div className="text-sm font-medium text-muted-foreground">Last 10 Digits (Live)</div>
-            <div className="flex gap-2 justify-center">
-              {lastDigits.map(({ digit, epoch, isEven, isNewest }, index) => (
-                <motion.div
-                  key={`${symbol}-${epoch}`}
-                  initial={isNewest ? { x: 20, scale: 0.8, opacity: 0 } : false}
-                  animate={{ x: 0, scale: 1, opacity: 1 }}
-                  transition={{ 
-                    type: "spring", 
-                    stiffness: 300, 
-                    damping: 25,
-                    duration: 0.3
-                  }}
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold transition-colors ${
-                    isEven 
-                      ? 'bg-even/20 text-even border border-even/30' 
-                      : 'bg-odd/20 text-odd border border-odd/30'
-                  } ${isNewest ? 'ring-2 ring-primary/50 ring-offset-1' : ''}`}
-                >
-                  {digit}
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-    </motion.div>
+            }
+          />
+          <LiveDigitsRow digits={lastDigits} symbol={symbol} cycleId={cycleId} />
+        </>
+      ) : null}
+    </SignalCardShell>
   );
 };
 
@@ -169,75 +93,64 @@ export const EvenOddSignals = () => {
   const { tickData, isConnected, symbols } = useDerivWebSocket();
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-even/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-odd/5 rounded-full blur-3xl" />
-      </div>
+    <div className="relative min-h-screen">
+      <SiteBackground variant="main" />
 
       <motion.header
-        initial={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="sticky top-0 z-50 glass border-b border-border"
+        className="sticky top-0 z-50 glass border-b border-border/60"
       >
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
-                <ArrowLeft className="w-5 h-5" />
+        <div className="container mx-auto px-3 sm:px-4 py-2.5 sm:py-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8 sm:h-9 sm:w-9" onClick={() => navigate('/')}>
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               </Button>
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-even to-odd flex items-center justify-center">
-                <Activity className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-foreground">Even/Odd Signals</h1>
-                <p className="text-xs text-muted-foreground">Predict even or odd last digits</p>
+              <BrandLogo size="sm" className="sm:hidden" />
+              <BrandLogo size="md" className="hidden sm:block" />
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-lg font-bold text-foreground truncate">Even / Odd</h1>
+                <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">Even or odd last-digit signals</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50">
+            <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+              <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 rounded-full bg-muted/50">
                 {isConnected ? (
                   <>
-                    <Wifi className="w-4 h-4 text-even" />
-                    <span className="text-sm text-even font-medium">Connected</span>
+                    <Wifi className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-even" />
+                    <span className="text-[11px] sm:text-sm text-even font-medium hidden sm:inline">Connected</span>
                   </>
                 ) : (
                   <>
-                    <WifiOff className="w-4 h-4 text-destructive" />
-                    <span className="text-sm text-destructive font-medium">Disconnected</span>
+                    <WifiOff className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-destructive" />
+                    <span className="text-[11px] sm:text-sm text-destructive font-medium hidden sm:inline">Offline</span>
                   </>
                 )}
               </div>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
-                <Home className="w-4 h-4 mr-2" />
-                Home
+              <Button variant="ghost" size="sm" className="h-8 px-2 sm:px-3" onClick={() => navigate('/')}>
+                <Home className="w-4 h-4 sm:mr-2" />
+                <span className="hidden sm:inline">Home</span>
               </Button>
             </div>
           </div>
         </div>
       </motion.header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          className={signalsGridClass}
         >
-          {symbols.map((symbol, index) => (
-            <motion.div
+          {symbols.map((symbol) => (
+            <EvenOddCard
               key={symbol}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 * index }}
-            >
-              <EvenOddCard
-                symbol={symbol}
-                ticks={tickData[symbol]?.ticks || []}
-                isConnected={tickData[symbol]?.isConnected || false}
-              />
-            </motion.div>
+              symbol={symbol}
+              ticks={tickData[symbol]?.ticks || []}
+              isConnected={tickData[symbol]?.isConnected || false}
+            />
           ))}
         </motion.div>
       </main>

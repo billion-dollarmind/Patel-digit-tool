@@ -23,7 +23,7 @@ const symbolNames: Record<string, string> = {
 };
 
 export const PredictionCard = ({ symbol, ticks, isConnected }: PredictionCardProps) => {
-  const { phase, countdown, signalTicks, collectedCount, isReady } = useSignalCycle(ticks);
+  const { phase, countdown, signalTicks, collectedCount, isReady } = useSignalCycle(ticks, symbol);
   
   const evenOddResult = useMemo(() => analyzeEvenOdd(signalTicks), [signalTicks]);
   const overUnderResult = useMemo(() => analyzeOverUnder(signalTicks), [signalTicks]);

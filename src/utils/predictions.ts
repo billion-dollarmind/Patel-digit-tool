@@ -27,6 +27,8 @@ export interface DigitMatchResult {
   prediction: number;
   confidence: number;
   frequency: Record<number, number>;
+  percentages: Record<number, number>;
+  total: number;
 }
 
 // Helper: Extract the 2nd decimal place digit from tick price
@@ -231,12 +233,21 @@ export const analyzeDigitMatch = (ticks: Tick[]): DigitMatchResult | null => {
     }
   });
   
-  const confidenceRaw = (maxCount / digits.length) * 100;
+  const total = digits.length;
+  const percentages: Record<number, number> = {};
+  for (let d = 0; d <= 9; d++) {
+    const count = frequency[d] || 0;
+    percentages[d] = total > 0 ? Math.round((count / total) * 100) : 0;
+  }
+
+  const confidenceRaw = (maxCount / total) * 100;
   const confidence = clampConfidence(confidenceRaw);
   
   return {
     prediction,
     confidence,
-    frequency
+    frequency,
+    percentages,
+    total,
   };
 };
