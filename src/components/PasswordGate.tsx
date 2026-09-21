@@ -82,7 +82,9 @@ export const PasswordGate = ({ onAuthenticated }: PasswordGateProps) => {
       return;
     }
     localStorage.setItem('patel-digit-tool-auth', 'true');
-    void loginWithDerivOAuth({ verifyAfter: runVerifyTrade, returnTo: '/' });
+    void loginWithDerivOAuth({ verifyAfter: runVerifyTrade, returnTo: '/' }).catch((err) => {
+      setError(err instanceof Error ? err.message : 'Failed to start Deriv OAuth');
+    });
   };
 
   const busy = isLoading || verifying;

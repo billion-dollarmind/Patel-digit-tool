@@ -308,15 +308,14 @@ export const buildOAuth2AuthorizeUrl = async (opts?: {
   url.searchParams.set('state', state);
   url.searchParams.set('code_challenge', codeChallenge);
   url.searchParams.set('code_challenge_method', 'S256');
-  // Bridge users still on legacy Deriv API
-  if (DERIV_APP_ID) url.searchParams.set('app_id', DERIV_APP_ID);
+  // Do NOT send legacy app_id=1089 here — it can bounce users to deriv.com marketing
   if (opts?.prompt) url.searchParams.set('prompt', opts.prompt);
   if (opts?.language) url.searchParams.set('lang', opts.language);
 
   return url.toString();
 };
 
-/** Legacy authorize URL (acct/token in redirect) */
+/** Legacy authorize URL (acct/token in redirect) — avoid app_id 1089 alone (lands on deriv.com) */
 export const buildLegacyOAuthUrl = (opts?: { language?: string }) => {
   const params = new URLSearchParams({
     app_id: DERIV_APP_ID,
@@ -326,14 +325,21 @@ export const buildLegacyOAuthUrl = (opts?: { language?: string }) => {
   return `${DERIV_LEGACY_OAUTH_URL}?${params.toString()}`;
 };
 
-/** Start OAuth — OAuth2+PKCE when client_id set, else legacy */
+/** Start OAuth2+PKCE (default). Legacy only if forceLegacy=true. */
 export const startDerivOAuth = async (intent: {
   verifyAfter: boolean;
   returnTo: string;
   prompt?: 'registration';
   forceLegacy?: boolean;
 }) => {
-  const useOAuth2 = isOAuth2Configured() && !intent.forceLegacy;
+  // Always prefer OAuth2 with client_id — legacy app_id=1089 dumps users on deriv.com
+  const useOAuth2 = !intent.forceLegacy && isOAuth2Configured();
+
+  if (!useOAuth2 && !intent.forceLegacy) {
+    throw new Error(
+      'OAuth2 client_id is missing. Set VITE_DERIV_CLIENT_ID and redeploy.'
+    );
+  }
 
   // PKCE state must be created on the same origin as the redirect URI
   if (useOAuth2 && !isOnOAuthRedirectOrigin()) {
@@ -355,6 +361,10 @@ export const startDerivOAuth = async (intent: {
 
   if (useOAuth2) {
     const url = await buildOAuth2AuthorizeUrl({ prompt: intent.prompt });
+    // Sanity: never navigate to plain deriv.com marketing
+    if (/^https?:\/\/(www\.)?deriv\.com\/?\?/i.test(url) || !url.includes('auth.deriv.com')) {
+      throw new Error(`Refusing bad OAuth URL: ${url}`);
+    }
     window.location.assign(url);
     return;
   }
