@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, Cpu, LogOut, KeyRound } from 'lucide-react';
+import { ArrowRight, Cpu, LogOut, KeyRound, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -186,6 +186,29 @@ export const Dashboard = () => {
             </div>
           </motion.div>
 
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass rounded-2xl p-5 space-y-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-emerald-400" />
+                  Admin + connected apps
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Hub-style applications, scanner access, and subscriber approvals
+                </p>
+              </div>
+              <Button variant="outline" onClick={() => navigate('/admin')}>
+                Open Admin
+              </Button>
+            </div>
+          </motion.div>
+        </section>
+
+        <section className="max-w-6xl mx-auto grid lg:grid-cols-1 gap-5">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}

@@ -11,9 +11,9 @@ export const DERIV_CLIENT_ID = String(
   import.meta.env.VITE_DERIV_CLIENT_ID || DEFAULT_CLIENT_ID
 ).trim();
 
-/** Space-separated OAuth2 scopes */
+/** Space-separated OAuth2 scopes — only request scopes enabled on the client */
 export const DERIV_OAUTH_SCOPES = String(
-  import.meta.env.VITE_DERIV_OAUTH_SCOPES || 'trade account_manage'
+  import.meta.env.VITE_DERIV_OAUTH_SCOPES || 'trade'
 ).trim();
 
 /**

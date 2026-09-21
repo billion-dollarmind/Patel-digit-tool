@@ -8,6 +8,8 @@ import { PasswordGate } from "@/components/PasswordGate";
 import { useAuth } from "@/hooks/useAuth";
 import { DerivAccountProvider, useDerivAccount } from "@/context/DerivAccountContext";
 import { SignalEngineProvider } from "@/context/SignalEngineContext";
+import { PlatformAdminProvider } from "@/context/PlatformAdminContext";
+import { FeatureGate } from "@/components/FeatureGate";
 import { isOAuthCallbackLocation } from "@/lib/derivConfig";
 import { consumeOAuthStartFlag } from "@/lib/derivOAuth";
 import { useEffect } from "react";
@@ -20,26 +22,90 @@ import { SpeedBotApp } from "./pages/apps/SpeedBotApp";
 import { AccumulatorsApp } from "./pages/apps/AccumulatorsApp";
 import { BotBuilderApp } from "./pages/apps/BotBuilderApp";
 import { OAuthCallback } from "./pages/OAuthCallback";
+import { AdminLayout } from "./pages/admin/AdminLayout";
+import { AdminOverview } from "./pages/admin/AdminOverview";
+import { AdminApps } from "./pages/admin/AdminApps";
+import { AdminAccess } from "./pages/admin/AdminAccess";
+import { AdminSubscribers } from "./pages/admin/AdminSubscribers";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
 const AuthenticatedApp = () => (
-  <SignalEngineProvider>
-    <Routes>
-      <Route path="/" element={<Dashboard />} />
-      <Route path="/dashboard" element={<Navigate to="/" replace />} />
-      <Route path="/signals/even-odd" element={<EvenOddSignals />} />
-      <Route path="/signals/over-under" element={<OverUnderSignals />} />
-      <Route path="/signals/digit-match" element={<DigitMatchSignals />} />
-      <Route path="/engine" element={<EngineMonitor />} />
-      <Route path="/apps/speedbot" element={<SpeedBotApp />} />
-      <Route path="/apps/accumulators" element={<AccumulatorsApp />} />
-      <Route path="/apps/bot-builder" element={<BotBuilderApp />} />
-      <Route path="/speed-bot" element={<Navigate to="/apps/speedbot" replace />} />
-      <Route path="*" element={<NotFound />} />
-    </Routes>
-  </SignalEngineProvider>
+  <PlatformAdminProvider>
+    <SignalEngineProvider>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Navigate to="/" replace />} />
+        <Route
+          path="/signals/even-odd"
+          element={
+            <FeatureGate feature="even_odd" title="Even/Odd locked">
+              <EvenOddSignals />
+            </FeatureGate>
+          }
+        />
+        <Route
+          path="/signals/over-under"
+          element={
+            <FeatureGate feature="over_under" title="Over/Under locked">
+              <OverUnderSignals />
+            </FeatureGate>
+          }
+        />
+        <Route
+          path="/signals/digit-match"
+          element={
+            <FeatureGate feature="digit_match" title="Digit Match locked">
+              <DigitMatchSignals />
+            </FeatureGate>
+          }
+        />
+        <Route
+          path="/engine"
+          element={
+            <FeatureGate feature="engine_monitor" title="Auto Engine locked">
+              <EngineMonitor />
+            </FeatureGate>
+          }
+        />
+        <Route
+          path="/apps/speedbot"
+          element={
+            <FeatureGate feature="speedbot" title="Speed Bot locked">
+              <SpeedBotApp />
+            </FeatureGate>
+          }
+        />
+        <Route
+          path="/apps/accumulators"
+          element={
+            <FeatureGate feature="accumulators" title="Accumulators locked">
+              <AccumulatorsApp />
+            </FeatureGate>
+          }
+        />
+        <Route
+          path="/apps/bot-builder"
+          element={
+            <FeatureGate feature="bot_builder" title="Bot Builder locked">
+              <BotBuilderApp />
+            </FeatureGate>
+          }
+        />
+        <Route path="/speed-bot" element={<Navigate to="/apps/speedbot" replace />} />
+
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminOverview />} />
+          <Route path="apps" element={<AdminApps />} />
+          <Route path="access" element={<AdminAccess />} />
+          <Route path="subscribers" element={<AdminSubscribers />} />
+        </Route>
+
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </SignalEngineProvider>
+  </PlatformAdminProvider>
 );
 
 const AppContent = () => {
@@ -47,7 +113,6 @@ const AppContent = () => {
   const { loginWithDerivOAuth } = useDerivAccount();
   const location = useLocation();
 
-  // If user clicked OAuth on localhost, we bounce here with ?patel_oauth_start=1
   useEffect(() => {
     const start = consumeOAuthStartFlag();
     if (!start) return;
@@ -66,7 +131,6 @@ const AppContent = () => {
     );
   }
 
-  // OAuth return can land on / (production redirect) or /oauth/callback
   if (isOAuthCallbackLocation(location.search, location.pathname)) {
     return <OAuthCallback />;
   }

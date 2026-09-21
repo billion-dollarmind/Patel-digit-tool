@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useDerivWebSocket } from '@/hooks/useDerivWebSocket';
+import { usePlatformAdmin } from '@/context/PlatformAdminContext';
 import {
   buildSignalFromTicks,
   CONNECTED_APPS,
@@ -68,6 +69,7 @@ const loadSettings = (): EngineSettings => {
 
 export const SignalEngineProvider = ({ children }: { children: ReactNode }) => {
   const { tickData, isConnected } = useDerivWebSocket();
+  const { pushSignalToConnectedApps } = usePlatformAdmin();
   const [settings, setSettings] = useState<EngineSettings>(() => loadSettings());
   const [running, setRunning] = useState(false);
   const [recentSignals, setRecentSignals] = useState<DispatchedSignal[]>(() =>
@@ -78,6 +80,8 @@ export const SignalEngineProvider = ({ children }: { children: ReactNode }) => {
   settingsRef.current = settings;
   const tickDataRef = useRef(tickData);
   tickDataRef.current = tickData;
+  const pushRef = useRef(pushSignalToConnectedApps);
+  pushRef.current = pushSignalToConnectedApps;
   const symbolCursor = useRef(0);
 
   useEffect(() => {
@@ -112,6 +116,8 @@ export const SignalEngineProvider = ({ children }: { children: ReactNode }) => {
 
     setLastError(null);
     signalDispatcher.dispatch(signal);
+    // Hub-style push to connected app webhooks (Applications with webhook URL)
+    void pushRef.current(signal, 'signal_dispatch').catch(() => undefined);
   }, []);
 
   useEffect(() => {
