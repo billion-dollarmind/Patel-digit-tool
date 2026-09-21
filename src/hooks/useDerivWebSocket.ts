@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Tick } from '@/utils/predictions';
 
-const DERIV_WS_URL = 'wss://ws.derivws.com/websockets/v3?app_id=1089';
+import { DERIV_WS_URL } from '@/lib/derivConfig';
 const SYMBOLS = [
   // Standard volatility indices
   'R_10', 'R_25', 'R_50', 'R_75', 'R_100',

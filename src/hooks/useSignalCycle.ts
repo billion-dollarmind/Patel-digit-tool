@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Tick } from '@/utils/predictions';
+import { Tick, estimateRecommendedRuns, getSignalHoldSeconds } from '@/utils/predictions';
 
-const SIGNAL_MIN = 12;
-const SIGNAL_SPAN = 14; // 12–25s
 const SCAN_MIN = 8;
-const SCAN_SPAN = 15; // 8–22s
+const SCAN_SPAN = 15; // 8–22s scan windows stay staggered
 
 type CyclePhase = 'collecting' | 'signal';
 
@@ -14,6 +12,7 @@ interface SignalCycleState {
   signalTicks: Tick[];
   scanDuration: number;
   signalDuration: number;
+  recommendedRuns: number;
 }
 
 const hashSeed = (input: string): number => {
@@ -25,28 +24,25 @@ const hashSeed = (input: string): number => {
   return Math.abs(h >>> 0);
 };
 
-/** Deterministic but varied duration so markets don't sync */
-const pickDuration = (symbol: string, cycleId: number, salt: string, min: number, span: number) => {
-  const h = hashSeed(`${symbol}|${cycleId}|${salt}`);
-  return min + (h % (span + 1));
+const pickScanDuration = (symbol: string, cycleId: number) => {
+  const h = hashSeed(`${symbol}|${cycleId}|scan`);
+  return SCAN_MIN + (h % (SCAN_SPAN + 1));
 };
 
-/** Stagger first cycle so cards don't all start together */
+/** Small extra stagger so markets still finish at different times */
+const pickStaggerSeconds = (symbol: string, cycleId: number) => {
+  const h = hashSeed(`${symbol}|${cycleId}|hold`);
+  return h % 8; // 0–7s
+};
+
 const pickStartOffsetMs = (symbol: string) => {
   const h = hashSeed(`${symbol}|boot`);
-  return (h % 11) * 1000; // 0–10s already elapsed feel
+  return (h % 11) * 1000; // 0–10s
 };
 
 export const useSignalCycle = (ticks: Tick[], symbol = 'default') => {
   const bootOffset = useMemo(() => pickStartOffsetMs(symbol), [symbol]);
-  const initialScan = useMemo(
-    () => pickDuration(symbol, 0, 'scan', SCAN_MIN, SCAN_SPAN),
-    [symbol]
-  );
-  const initialSignal = useMemo(
-    () => pickDuration(symbol, 0, 'signal', SIGNAL_MIN, SIGNAL_SPAN),
-    [symbol]
-  );
+  const initialScan = useMemo(() => pickScanDuration(symbol, 0), [symbol]);
 
   const [state, setState] = useState<SignalCycleState>(() => {
     const elapsedSec = Math.floor(bootOffset / 1000);
@@ -56,7 +52,8 @@ export const useSignalCycle = (ticks: Tick[], symbol = 'default') => {
       countdown: remaining,
       signalTicks: [],
       scanDuration: initialScan,
-      signalDuration: initialSignal,
+      signalDuration: getSignalHoldSeconds(8),
+      recommendedRuns: 8,
     };
   });
   const [cycleId, setCycleId] = useState(0);
@@ -64,7 +61,7 @@ export const useSignalCycle = (ticks: Tick[], symbol = 'default') => {
   const cycleStartRef = useRef<number>(Date.now() - (initialScan - state.countdown) * 1000);
   const streamStartEpochRef = useRef<number | null>(null);
   const scanDurationRef = useRef(initialScan);
-  const signalDurationRef = useRef(initialSignal);
+  const signalDurationRef = useRef(getSignalHoldSeconds(8));
   const cycleIdRef = useRef(0);
   const ticksRef = useRef(ticks);
   ticksRef.current = ticks;
@@ -78,10 +75,8 @@ export const useSignalCycle = (ticks: Tick[], symbol = 'default') => {
   const startNewCycle = useCallback(() => {
     cycleIdRef.current += 1;
     const nextCycle = cycleIdRef.current;
-    const scanDuration = pickDuration(symbol, nextCycle, 'scan', SCAN_MIN, SCAN_SPAN);
-    const signalDuration = pickDuration(symbol, nextCycle, 'signal', SIGNAL_MIN, SIGNAL_SPAN);
+    const scanDuration = pickScanDuration(symbol, nextCycle);
     scanDurationRef.current = scanDuration;
-    signalDurationRef.current = signalDuration;
 
     const latest = ticksRef.current;
     streamStartEpochRef.current = latest.length
@@ -94,7 +89,8 @@ export const useSignalCycle = (ticks: Tick[], symbol = 'default') => {
       countdown: scanDuration,
       signalTicks: [],
       scanDuration,
-      signalDuration,
+      signalDuration: signalDurationRef.current,
+      recommendedRuns: 8,
     });
   }, [symbol]);
 
@@ -116,15 +112,21 @@ export const useSignalCycle = (ticks: Tick[], symbol = 'default') => {
             ? captured[0].epoch - 1
             : streamStartEpochRef.current;
 
+          const runs = estimateRecommendedRuns(captured);
+          const stagger = pickStaggerSeconds(symbol, cycleIdRef.current);
+          const signalDuration = getSignalHoldSeconds(runs, stagger);
+          signalDurationRef.current = signalDuration;
+
           cycleStartRef.current = Date.now();
           cycleIdRef.current += 1;
           setCycleId(cycleIdRef.current);
           setState({
             phase: 'signal',
-            countdown: signalDurationRef.current,
+            countdown: signalDuration,
             signalTicks: captured,
             scanDuration: scanDurationRef.current,
-            signalDuration: signalDurationRef.current,
+            signalDuration,
+            recommendedRuns: runs,
           });
         } else if (remaining !== state.countdown) {
           setState((prev) => ({ ...prev, countdown: remaining }));
@@ -142,7 +144,7 @@ export const useSignalCycle = (ticks: Tick[], symbol = 'default') => {
     }, 100);
 
     return () => clearInterval(interval);
-  }, [state.phase, state.countdown, startNewCycle]);
+  }, [state.phase, state.countdown, startNewCycle, symbol]);
 
   const liveCycleTicks = useMemo(() => {
     const baseline = streamStartEpochRef.current;
@@ -155,6 +157,7 @@ export const useSignalCycle = (ticks: Tick[], symbol = 'default') => {
     countdown: state.countdown,
     scanDuration: state.scanDuration,
     signalDuration: state.signalDuration,
+    recommendedRuns: state.recommendedRuns,
     signalTicks: state.phase === 'signal' ? state.signalTicks : liveCycleTicks.slice(-15),
     liveCycleTicks,
     cycleId,

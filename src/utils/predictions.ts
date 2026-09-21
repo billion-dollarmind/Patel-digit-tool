@@ -47,12 +47,20 @@ const clampConfidence = (value: number): number => {
   return Math.max(55, Math.min(95, Math.round(value)));
 };
 
-// Helper: Calculate recommended runs based on confidence
-const calculateRecommendedRuns = (confidence: number): number => {
-  const normalized = (confidence - 55) / 40; // 0 to 1 scale
-  if (normalized > 0.75) return Math.floor(Math.random() * 5) + 11; // 11-15
-  if (normalized > 0.5) return Math.floor(Math.random() * 6) + 8; // 8-13
-  return Math.floor(Math.random() * 6) + 5; // 5-10
+// Helper: Calculate recommended runs based on confidence (deterministic)
+export const calculateRecommendedRuns = (confidence: number): number => {
+  // Map confidence 55–95 → 5–15 runs
+  const t = Math.max(0, Math.min(1, (confidence - 55) / 40));
+  return Math.round(5 + t * 10);
+};
+
+/** Seconds a signal should stay visible to fit the recommended runs */
+export const SECONDS_PER_RUN = 3;
+export const SIGNAL_ENTRY_BUFFER = 10; // read signal / wait for entry digits
+
+export const getSignalHoldSeconds = (recommendedRuns: number, staggerSeconds = 0): number => {
+  const runs = Math.max(5, Math.min(15, recommendedRuns));
+  return runs * SECONDS_PER_RUN + SIGNAL_ENTRY_BUFFER + Math.max(0, staggerSeconds);
 };
 
 // Even/Odd Analysis
@@ -250,4 +258,18 @@ export const analyzeDigitMatch = (ticks: Tick[]): DigitMatchResult | null => {
     percentages,
     total,
   };
+};
+
+/** Best-effort run estimate from whatever analysis fits the ticks */
+export const estimateRecommendedRuns = (ticks: Tick[]): number => {
+  const overUnder = analyzeOverUnder(ticks);
+  if (overUnder) return overUnder.recommendedRuns;
+
+  const evenOdd = analyzeEvenOdd(ticks);
+  if (evenOdd) return calculateRecommendedRuns(evenOdd.confidence);
+
+  const digitMatch = analyzeDigitMatch(ticks);
+  if (digitMatch) return calculateRecommendedRuns(digitMatch.confidence);
+
+  return 8;
 };

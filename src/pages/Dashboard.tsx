@@ -1,11 +1,16 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, LogOut } from 'lucide-react';
+import { ArrowRight, Cpu, LogOut, KeyRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { useAuth } from '@/hooks/useAuth';
 import { BrandLogo, SiteBackground } from '@/components/Brand';
+import { useDerivAccount } from '@/context/DerivAccountContext';
+import { useSignalEngine } from '@/context/SignalEngineContext';
+import { CONNECTED_APPS } from '@/lib/signalDispatcher';
 
 const featuredSignals = [
   {
@@ -37,6 +42,32 @@ const featuredSignals = [
 export const Dashboard = () => {
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const {
+    account,
+    verified,
+    verifying,
+    connectAndVerify,
+    loginWithDerivOAuth,
+    switchOAuthAccount,
+    oauthAccounts,
+    disconnectAccount,
+    verifyStake,
+    verifySymbol,
+    error: derivError,
+    appId,
+    clientId,
+    oauth2Enabled,
+    redirectUri,
+  } = useDerivAccount();
+  const { running, settings, recentSignals } = useSignalEngine();
+  const [tokenInput, setTokenInput] = useState('');
+  const [runVerify, setRunVerify] = useState(true);
+
+  const handleConnect = async () => {
+    if (!tokenInput.trim()) return;
+    await connectAndVerify(tokenInput, runVerify);
+    setTokenInput('');
+  };
 
   return (
     <div className="relative min-h-screen">
@@ -54,7 +85,9 @@ export const Dashboard = () => {
               <BrandLogo size="md" />
               <div>
                 <h1 className="text-lg font-bold gradient-text">Patel Digit Tool</h1>
-                <p className="text-xs text-muted-foreground">Choose Your Signal Type</p>
+                <p className="text-xs text-muted-foreground">
+                  {running ? `Engine live · ${settings.strategyMode}` : 'Choose signal or launch apps'}
+                </p>
               </div>
             </div>
 
@@ -74,17 +107,17 @@ export const Dashboard = () => {
         </div>
       </motion.header>
 
-      <main className="relative container mx-auto px-4 py-10 md:py-14">
+      <main className="relative container mx-auto px-4 py-10 md:py-14 space-y-12">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-10 md:mb-14"
+          className="text-center"
         >
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-3 tracking-tight">
             Select Signal Type
           </h2>
           <p className="text-muted-foreground max-w-lg mx-auto">
-            Real-time AI-assisted predictions across volatility indices — 15s scan, 20s signal window.
+            Real-time AI-assisted predictions — or start Auto Engine to push into connected apps.
           </p>
         </motion.div>
 
@@ -130,21 +163,172 @@ export const Dashboard = () => {
           ))}
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="mt-10 glass rounded-2xl p-6 text-center max-w-2xl mx-auto"
-        >
-          <h3 className="text-lg font-semibold text-foreground mb-2">
-            How It Works
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            Each signal type scans the market for <strong>15 seconds</strong> to collect tick data,
-            then displays a signal for <strong>20 seconds</strong> before scanning again.
-            This cycle keeps predictions fresh from the latest ticks.
-          </p>
-        </motion.div>
+        {/* Auto Engine + Deriv */}
+        <section className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-5">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass rounded-2xl p-5 space-y-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-cyan-400" />
+                  Auto Engine / Dispatcher
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {running
+                    ? `Running · ${recentSignals.length} recent dispatches`
+                    : 'Stopped — start to push Even/Odd, Over/Under, Digit Match to apps'}
+                </p>
+              </div>
+              <Button onClick={() => navigate('/engine')}>Open Monitor</Button>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass rounded-2xl p-5 space-y-3"
+          >
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-fuchsia-400" />
+              Deriv account
+            </h3>
+            {account ? (
+              <div className="space-y-2 text-sm">
+                <p>
+                  <span className="text-muted-foreground">Login ID:</span>{' '}
+                  <span className="font-mono text-cyan-300">{account.loginid}</span>
+                </p>
+                <p>
+                  Balance: {account.balance} {account.currency} ·{' '}
+                  {verified ? (
+                    <span className="text-emerald-400">verified</span>
+                  ) : (
+                    <span className="text-amber-400">not verified</span>
+                  )}
+                </p>
+                {oauthAccounts.length > 1 && (
+                  <label className="block text-xs space-y-1">
+                    <span className="text-muted-foreground">Switch OAuth account</span>
+                    <select
+                      className="w-full h-9 rounded-md border border-border bg-background/70 px-2 font-mono text-xs"
+                      value={
+                        oauthAccounts.find(
+                          (a) => a.account.toLowerCase() === account.loginid.toLowerCase()
+                        )?.account || oauthAccounts[0]?.account
+                      }
+                      onChange={(e) => {
+                        const next = oauthAccounts.find((a) => a.account === e.target.value);
+                        if (next) void switchOAuthAccount(next, false);
+                      }}
+                    >
+                      {oauthAccounts.map((a) => (
+                        <option key={a.account} value={a.account}>
+                          {a.account} ({a.currency})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void loginWithDerivOAuth({ verifyAfter: false, returnTo: '/' })}
+                  >
+                    Re-login with Deriv
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={disconnectAccount}>
+                    Disconnect
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Button
+                  className="w-full bg-[#ff444f] hover:bg-[#ff5c65] text-white"
+                  onClick={() => void loginWithDerivOAuth({ verifyAfter: runVerify, returnTo: '/' })}
+                  disabled={verifying}
+                >
+                  {oauth2Enabled ? 'Login with Deriv OAuth2' : 'Login with Deriv (legacy)'}
+                </Button>
+                <div className="relative py-1">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-border/50" />
+                  </div>
+                  <div className="relative flex justify-center text-[10px] uppercase">
+                    <span className="bg-card/80 px-2 text-muted-foreground">or paste</span>
+                  </div>
+                </div>
+                <Input
+                  type="password"
+                  placeholder="Deriv API token"
+                  value={tokenInput}
+                  onChange={(e) => setTokenInput(e.target.value)}
+                  className="font-mono text-sm"
+                />
+                <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={runVerify}
+                    onChange={(e) => setRunVerify(e.target.checked)}
+                  />
+                  Verify with ${verifyStake} DIGITODD on {verifySymbol}
+                </label>
+                {derivError && <p className="text-xs text-destructive">{derivError}</p>}
+                <Button onClick={handleConnect} disabled={verifying || !tokenInput.trim()}>
+                  {verifying ? 'Verifying…' : 'Connect & verify'}
+                </Button>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  {oauth2Enabled ? (
+                    <>
+                      client_id <span className="font-mono">{clientId}</span> · app_id{' '}
+                      <span className="font-mono">{appId}</span>
+                    </>
+                  ) : (
+                    <>
+                      app_id <span className="font-mono">{appId}</span> · set{' '}
+                      <span className="font-mono">VITE_DERIV_CLIENT_ID</span> for OAuth2
+                    </>
+                  )}
+                  <br />
+                  redirect <span className="font-mono break-all">{redirectUri}</span>
+                </p>
+              </div>
+            )}
+          </motion.div>
+        </section>
+
+        {/* Connected apps */}
+        <section className="max-w-6xl mx-auto space-y-4">
+          <div className="text-center">
+            <h3 className="text-2xl font-bold">Connected trading apps</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Downstream products that receive dispatcher signals and can execute trades
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-4">
+            {CONNECTED_APPS.map((app, i) => (
+              <motion.button
+                key={app.id}
+                type="button"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.08 * i }}
+                onClick={() => navigate(app.route)}
+                className="glass rounded-2xl p-5 text-left border border-white/10 hover:border-cyan-400/40 transition-colors"
+              >
+                <h4 className="font-semibold text-foreground">{app.name}</h4>
+                <p className="text-sm text-muted-foreground mt-2">{app.description}</p>
+                <span className="inline-flex items-center gap-1 text-sm text-cyan-300 mt-4 font-medium">
+                  Open app <ArrowRight className="w-3.5 h-3.5" />
+                </span>
+              </motion.button>
+            ))}
+          </div>
+        </section>
       </main>
     </div>
   );

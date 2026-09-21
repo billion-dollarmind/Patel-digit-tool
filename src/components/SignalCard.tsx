@@ -98,9 +98,11 @@ interface CompactSignalProps {
   toneClass: string;
   pulse?: boolean;
   stats?: ReactNode;
+  /** Override the default ENTRY label (e.g. MATCH NOW) */
+  actionLabel?: string;
 }
 
-/** One-line prediction: badge + ENTRY + confidence + optional stats */
+/** One-line prediction: badge + action + confidence + optional stats */
 export const CompactSignal = ({
   label,
   sublabel,
@@ -108,25 +110,28 @@ export const CompactSignal = ({
   toneClass,
   pulse,
   stats,
+  actionLabel = 'ENTRY',
 }: CompactSignalProps) => (
   <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-wrap sm:flex-nowrap">
     <motion.div
       initial={{ scale: 0.85, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       className={cn(
-        'h-8 sm:h-9 px-2.5 sm:px-3 rounded-full flex items-center justify-center gap-1 shadow-lg text-white shrink-0',
+        'relative h-8 sm:h-9 px-2.5 sm:px-3 rounded-full flex items-center justify-center gap-1 shadow-lg text-white shrink-0',
         toneClass,
         pulse && 'animate-pulse'
       )}
     >
-      <span className="text-sm sm:text-base font-black tracking-wide leading-none">{label}</span>
+      {/* Soft glow ring pulsing toward the digit */}
+      <span className="pointer-events-none absolute inset-0 rounded-full bg-white/10 animate-ping opacity-40" />
+      <span className="relative text-sm sm:text-base font-black tracking-wide leading-none">{label}</span>
       {sublabel != null && (
-        <span className="text-sm sm:text-base font-black leading-none opacity-90">{sublabel}</span>
+        <span className="relative text-sm sm:text-base font-black leading-none opacity-90">{sublabel}</span>
       )}
     </motion.div>
 
     <div className="flex items-center gap-1 text-[11px] sm:text-xs font-bold text-even shrink-0">
-      <span>ENTRY</span>
+      <span>{actionLabel}</span>
       <span className="w-3 h-3 rounded-full bg-gradient-to-r from-pink-500 to-red-500 flex items-center justify-center">
         <span className="w-1 h-1 bg-white rounded-full" />
       </span>
@@ -138,6 +143,66 @@ export const CompactSignal = ({
         {stats}
       </div>
     )}
+  </div>
+);
+
+/** Animated callout: flow into glowing digit → MATCH NOW → Entry digit N */
+export const MatchNowBanner = ({ digit }: { digit: number }) => (
+  <div className="relative overflow-hidden rounded-md border border-match/35 bg-match/10 px-2 py-1.5">
+    {/* Flow streaks toward the digit */}
+    <div className="pointer-events-none absolute inset-y-0 left-0 right-16 overflow-hidden">
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="absolute top-1/2 h-0.5 w-8 -translate-y-1/2 rounded-full bg-gradient-to-r from-transparent via-match to-match/80"
+          initial={{ left: '-10%', opacity: 0 }}
+          animate={{ left: ['0%', '85%'], opacity: [0, 1, 0] }}
+          transition={{
+            duration: 1.4,
+            repeat: Infinity,
+            delay: i * 0.35,
+            ease: 'easeInOut',
+          }}
+        />
+      ))}
+    </div>
+
+    <div className="relative flex items-center gap-2 min-w-0">
+      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+        <motion.span
+          className="text-[11px] sm:text-xs font-black tracking-wider text-match uppercase"
+          animate={{ opacity: [0.55, 1, 0.55], x: [0, 3, 0] }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          Match now
+        </motion.span>
+        <motion.span
+          className="text-match/80 text-xs"
+          animate={{ x: [0, 4, 0], opacity: [0.4, 1, 0.4] }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          →
+        </motion.span>
+        <span className="text-[11px] sm:text-xs text-muted-foreground truncate">
+          Entry digit
+        </span>
+      </div>
+
+      <motion.div
+        className="relative shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-match to-orange-600 flex items-center justify-center text-white font-black text-base shadow-lg shadow-match/40"
+        animate={{
+          scale: [1, 1.12, 1],
+          boxShadow: [
+            '0 0 0 0 rgba(249, 115, 22, 0.55)',
+            '0 0 0 10px rgba(249, 115, 22, 0)',
+            '0 0 0 0 rgba(249, 115, 22, 0)',
+          ],
+        }}
+        transition={{ duration: 1.5, repeat: Infinity, ease: 'easeOut' }}
+      >
+        {digit}
+      </motion.div>
+    </div>
   </div>
 );
 

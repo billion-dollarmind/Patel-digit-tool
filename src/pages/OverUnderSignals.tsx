@@ -25,7 +25,7 @@ interface SignalCardProps {
 }
 
 const OverUnderCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
-  const { phase, countdown, signalTicks, collectedCount, isReady, liveCycleTicks, cycleId, scanDuration } =
+  const { phase, countdown, signalTicks, collectedCount, isReady, liveCycleTicks, cycleId, scanDuration, recommendedRuns } =
     useSignalCycle(ticks, symbol);
   const { addPrediction } = usePerformanceTracking();
   const overUnderResult = useMemo(() => analyzeOverUnder(signalTicks), [signalTicks]);
@@ -112,6 +112,9 @@ const OverUnderCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
                 </span>
               </>
             )}
+            <div className="mt-1 text-[10px] text-muted-foreground font-mono">
+              Signal open for {countdown}s more (sized for {recommendedRuns} runs @ ~3s each)
+            </div>
           </div>
           <LiveDigitsRow digits={lastDigits} symbol={symbol} cycleId={cycleId} />
         </>

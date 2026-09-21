@@ -11,6 +11,7 @@ import {
   AnalyzingState,
   CompactSignal,
   LiveDigitsRow,
+  MatchNowBanner,
   SignalCardShell,
   signalsGridClass,
 } from '@/components/SignalCard';
@@ -68,8 +69,9 @@ const DigitMatchCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
           <CompactSignal
             label={digitMatchResult.prediction}
             confidence={digitMatchResult.confidence}
-            toneClass="bg-gradient-to-br from-match to-orange-600"
-            pulse={digitMatchResult.confidence > 75}
+            actionLabel="MATCH NOW"
+            toneClass="bg-gradient-to-br from-match to-orange-600 shadow-match/50"
+            pulse
             stats={
               <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
                 {topDigits.map(({ d, pct }) => (
@@ -87,6 +89,7 @@ const DigitMatchCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
               </div>
             }
           />
+          <MatchNowBanner digit={digitMatchResult.prediction} />
           <LiveDigitsRow digits={lastDigits} symbol={symbol} cycleId={cycleId} />
         </>
       ) : null}
