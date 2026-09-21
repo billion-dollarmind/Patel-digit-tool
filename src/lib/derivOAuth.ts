@@ -50,18 +50,154 @@ const OAUTH_INTENT_KEY = 'patel-deriv-oauth-intent';
 const OAUTH_ACCOUNTS_KEY = 'patel-deriv-oauth-accounts';
 const PKCE_VERIFIER_KEY = 'patel-oauth2-code-verifier';
 const PKCE_STATE_KEY = 'patel-oauth2-state';
+const PKCE_TS_KEY = 'patel-oauth2-pkce-ts';
 const OAUTH2_TOKEN_KEY = 'patel-oauth2-token-set';
+const OAUTH_START_FLAG = 'patel_oauth_start';
+const PKCE_TTL_MS = 10 * 60 * 1000;
+
+/** Parent cookie domain so www and apex share PKCE (e.g. .dukehub.site) */
+const cookieDomainForRedirect = (): string | undefined => {
+  try {
+    const host = new URL(getOAuthRedirectUri()).hostname;
+    const parts = host.split('.').filter(Boolean);
+    if (parts.length >= 2) return `.${parts.slice(-2).join('.')}`;
+  } catch {
+    /* ignore */
+  }
+  return undefined;
+};
+
+const writeCookie = (name: string, value: string, maxAgeSec = 600) => {
+  if (typeof document === 'undefined') return;
+  const domain = cookieDomainForRedirect();
+  let cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAgeSec}; SameSite=Lax`;
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+    cookie += '; Secure';
+  }
+  if (domain) cookie += `; Domain=${domain}`;
+  document.cookie = cookie;
+};
+
+const readCookie = (name: string): string | null => {
+  if (typeof document === 'undefined') return null;
+  const parts = document.cookie.split(';');
+  for (const part of parts) {
+    const [k, ...rest] = part.trim().split('=');
+    if (k === name) return decodeURIComponent(rest.join('=') || '');
+  }
+  return null;
+};
+
+const clearCookie = (name: string) => {
+  if (typeof document === 'undefined') return;
+  const domain = cookieDomainForRedirect();
+  let cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax`;
+  if (domain) cookie += `; Domain=${domain}`;
+  document.cookie = cookie;
+  // Also clear host-only cookie if Domain one differs
+  document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax`;
+};
+
+const pkceStorage = () => {
+  try {
+    return window.localStorage;
+  } catch {
+    return window.sessionStorage;
+  }
+};
+
+const setPkce = (verifier: string, state: string) => {
+  const store = pkceStorage();
+  const ts = String(Date.now());
+  store.setItem(PKCE_VERIFIER_KEY, verifier);
+  store.setItem(PKCE_STATE_KEY, state);
+  store.setItem(PKCE_TS_KEY, ts);
+  try {
+    sessionStorage.setItem(PKCE_VERIFIER_KEY, verifier);
+    sessionStorage.setItem(PKCE_STATE_KEY, state);
+    sessionStorage.setItem(PKCE_TS_KEY, ts);
+  } catch {
+    /* ignore */
+  }
+  // Shared across www / non-www on the same registrable domain
+  writeCookie(PKCE_VERIFIER_KEY, verifier);
+  writeCookie(PKCE_STATE_KEY, state);
+  writeCookie(PKCE_TS_KEY, ts);
+};
+
+const getPkce = () => {
+  const store = pkceStorage();
+  const ts = Number(
+    store.getItem(PKCE_TS_KEY) ||
+      sessionStorage.getItem(PKCE_TS_KEY) ||
+      readCookie(PKCE_TS_KEY) ||
+      0
+  );
+  if (ts && Date.now() - ts > PKCE_TTL_MS) {
+    clearPkce();
+    return { verifier: null as string | null, state: null as string | null, expired: true };
+  }
+  const verifier =
+    store.getItem(PKCE_VERIFIER_KEY) ||
+    sessionStorage.getItem(PKCE_VERIFIER_KEY) ||
+    readCookie(PKCE_VERIFIER_KEY);
+  const state =
+    store.getItem(PKCE_STATE_KEY) ||
+    sessionStorage.getItem(PKCE_STATE_KEY) ||
+    readCookie(PKCE_STATE_KEY);
+  return { verifier, state, expired: false };
+};
+
+const clearPkce = () => {
+  const store = pkceStorage();
+  [PKCE_VERIFIER_KEY, PKCE_STATE_KEY, PKCE_TS_KEY].forEach((k) => {
+    store.removeItem(k);
+    try {
+      sessionStorage.removeItem(k);
+    } catch {
+      /* ignore */
+    }
+    clearCookie(k);
+  });
+};
+
+/** If we're not on the registered redirect origin, bounce there first so PKCE can work */
+export const getOAuthRedirectOrigin = () => {
+  try {
+    return new URL(getOAuthRedirectUri()).origin;
+  } catch {
+    return typeof window !== 'undefined' ? window.location.origin : '';
+  }
+};
+
+export const isOnOAuthRedirectOrigin = () => {
+  if (typeof window === 'undefined') return true;
+  const configured = DERIV_REDIRECT_URI;
+  if (!configured) return true;
+  return window.location.origin === getOAuthRedirectOrigin();
+};
 
 export const saveOAuthIntent = (intent: Omit<OAuthIntent, 'startedAt'>) => {
-  sessionStorage.setItem(
-    OAUTH_INTENT_KEY,
-    JSON.stringify({ ...intent, startedAt: Date.now() } satisfies OAuthIntent)
-  );
+  const payload = JSON.stringify({ ...intent, startedAt: Date.now() } satisfies OAuthIntent);
+  try {
+    localStorage.setItem(OAUTH_INTENT_KEY, payload);
+  } catch {
+    /* ignore */
+  }
+  try {
+    sessionStorage.setItem(OAUTH_INTENT_KEY, payload);
+  } catch {
+    /* ignore */
+  }
+  writeCookie(OAUTH_INTENT_KEY, payload);
 };
 
 export const loadOAuthIntent = (): OAuthIntent | null => {
   try {
-    const raw = sessionStorage.getItem(OAUTH_INTENT_KEY);
+    const raw =
+      localStorage.getItem(OAUTH_INTENT_KEY) ||
+      sessionStorage.getItem(OAUTH_INTENT_KEY) ||
+      readCookie(OAUTH_INTENT_KEY);
     if (!raw) return null;
     return JSON.parse(raw) as OAuthIntent;
   } catch {
@@ -69,7 +205,19 @@ export const loadOAuthIntent = (): OAuthIntent | null => {
   }
 };
 
-export const clearOAuthIntent = () => sessionStorage.removeItem(OAUTH_INTENT_KEY);
+export const clearOAuthIntent = () => {
+  try {
+    localStorage.removeItem(OAUTH_INTENT_KEY);
+  } catch {
+    /* ignore */
+  }
+  try {
+    sessionStorage.removeItem(OAUTH_INTENT_KEY);
+  } catch {
+    /* ignore */
+  }
+  clearCookie(OAUTH_INTENT_KEY);
+};
 
 export const saveOAuthAccounts = (accounts: OAuthAccount[]) => {
   sessionStorage.setItem(OAUTH_ACCOUNTS_KEY, JSON.stringify(accounts));
@@ -150,8 +298,7 @@ export const buildOAuth2AuthorizeUrl = async (opts?: {
   const state = generateOAuthState();
   const redirectUri = getOAuthRedirectUri();
 
-  sessionStorage.setItem(PKCE_VERIFIER_KEY, codeVerifier);
-  sessionStorage.setItem(PKCE_STATE_KEY, state);
+  setPkce(codeVerifier, state);
 
   const url = new URL(DERIV_OAUTH2_AUTH_URL);
   url.searchParams.set('response_type', 'code');
@@ -187,6 +334,18 @@ export const startDerivOAuth = async (intent: {
   forceLegacy?: boolean;
 }) => {
   const useOAuth2 = isOAuth2Configured() && !intent.forceLegacy;
+
+  // PKCE state must be created on the same origin as the redirect URI
+  if (useOAuth2 && !isOnOAuthRedirectOrigin()) {
+    const target = new URL(getOAuthRedirectUri());
+    target.searchParams.set(OAUTH_START_FLAG, '1');
+    target.searchParams.set('verify', intent.verifyAfter ? '1' : '0');
+    target.searchParams.set('returnTo', intent.returnTo || '/');
+    if (intent.prompt) target.searchParams.set('prompt', intent.prompt);
+    window.location.assign(target.toString());
+    return;
+  }
+
   saveOAuthIntent({
     verifyAfter: intent.verifyAfter,
     returnTo: intent.returnTo,
@@ -201,6 +360,30 @@ export const startDerivOAuth = async (intent: {
   }
 
   window.location.assign(buildLegacyOAuthUrl());
+};
+
+/** Consume ?patel_oauth_start=1 on the redirect host and begin Deriv login */
+export const consumeOAuthStartFlag = (): {
+  verifyAfter: boolean;
+  returnTo: string;
+  prompt?: 'registration';
+} | null => {
+  if (typeof window === 'undefined') return null;
+  const q = new URLSearchParams(window.location.search);
+  if (q.get(OAUTH_START_FLAG) !== '1') return null;
+  const result = {
+    verifyAfter: q.get('verify') !== '0',
+    returnTo: q.get('returnTo') || '/',
+    prompt: q.get('prompt') === 'registration' ? ('registration' as const) : undefined,
+  };
+  q.delete(OAUTH_START_FLAG);
+  q.delete('verify');
+  q.delete('returnTo');
+  q.delete('prompt');
+  const url = new URL(window.location.href);
+  url.search = q.toString();
+  window.history.replaceState({}, document.title, url.pathname + (url.search ? `?${url.search}` : ''));
+  return result;
 };
 
 export interface OAuth2CallbackParams {
@@ -223,16 +406,30 @@ export const parseOAuth2CallbackParams = (
 };
 
 export const verifyOAuth2State = (returnedState?: string) => {
-  const expected = sessionStorage.getItem(PKCE_STATE_KEY);
-  if (!returnedState || !expected || returnedState !== expected) {
-    throw new Error('OAuth state mismatch — possible CSRF. Start Login with Deriv again.');
+  const { state: expected, expired } = getPkce();
+  if (expired) {
+    throw new Error(
+      'OAuth login expired (over 10 minutes). Start Login with Deriv again from https://www.dukehub.site/'
+    );
+  }
+  if (!returnedState || !expected) {
+    throw new Error(
+      'OAuth state missing. Use https://www.dukehub.site/ (with www), redeploy the latest build, then try Login with Deriv again.'
+    );
+  }
+  if (returnedState !== expected) {
+    throw new Error(
+      'OAuth state mismatch. Prefer https://www.dukehub.site/ (with www — same as your redirect URL), then try again.'
+    );
   }
 };
 
 export const exchangeOAuth2Code = async (code: string): Promise<OAuth2TokenSet> => {
-  const codeVerifier = sessionStorage.getItem(PKCE_VERIFIER_KEY);
+  const { verifier: codeVerifier } = getPkce();
   if (!codeVerifier) {
-    throw new Error('Missing PKCE code_verifier — restart Login with Deriv');
+    throw new Error(
+      'Missing PKCE code_verifier. Start Login with Deriv from https://www.dukehub.site/ so the verifier is saved on that site.'
+    );
   }
   if (!DERIV_CLIENT_ID) {
     throw new Error('VITE_DERIV_CLIENT_ID is not configured');
@@ -261,8 +458,7 @@ export const exchangeOAuth2Code = async (code: string): Promise<OAuth2TokenSet> 
     error_description?: string;
   };
 
-  sessionStorage.removeItem(PKCE_VERIFIER_KEY);
-  sessionStorage.removeItem(PKCE_STATE_KEY);
+  clearPkce();
 
   if (!response.ok || !data.access_token) {
     throw new Error(data.error_description || data.error || `Token exchange failed (${response.status})`);

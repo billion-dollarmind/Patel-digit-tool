@@ -34,8 +34,18 @@ export const OAuthCallback = () => {
     if (started.current) return;
     started.current = true;
 
-    const intent = loadOAuthIntent();
     const oauth2Params = parseOAuth2CallbackParams();
+    const lockKey = oauth2Params.code
+      ? `patel-oauth-handled:${oauth2Params.code.slice(0, 24)}`
+      : '';
+
+    if (lockKey && sessionStorage.getItem(lockKey) === '1') {
+      setStatus('OAuth already processed — continuing…');
+      return;
+    }
+    if (lockKey) sessionStorage.setItem(lockKey, '1');
+
+    const intent = loadOAuthIntent();
 
     if (oauth2Params.error) {
       stripOAuthParamsFromUrl();
@@ -48,6 +58,7 @@ export const OAuthCallback = () => {
       try {
         verifyOAuth2State(oauth2Params.state);
       } catch (err) {
+        if (lockKey) sessionStorage.removeItem(lockKey);
         stripOAuthParamsFromUrl();
         setError(err instanceof Error ? err.message : 'Invalid OAuth state');
         setStatus('');

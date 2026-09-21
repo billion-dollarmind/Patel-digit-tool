@@ -6,9 +6,11 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { ThemeProvider } from "next-themes";
 import { PasswordGate } from "@/components/PasswordGate";
 import { useAuth } from "@/hooks/useAuth";
-import { DerivAccountProvider } from "@/context/DerivAccountContext";
+import { DerivAccountProvider, useDerivAccount } from "@/context/DerivAccountContext";
 import { SignalEngineProvider } from "@/context/SignalEngineContext";
 import { isOAuthCallbackLocation } from "@/lib/derivConfig";
+import { consumeOAuthStartFlag } from "@/lib/derivOAuth";
+import { useEffect } from "react";
 import { Dashboard } from "./pages/Dashboard";
 import { EvenOddSignals } from "./pages/EvenOddSignals";
 import { OverUnderSignals } from "./pages/OverUnderSignals";
@@ -42,7 +44,19 @@ const AuthenticatedApp = () => (
 
 const AppContent = () => {
   const { isAuthenticated, isLoading, authenticate } = useAuth();
+  const { loginWithDerivOAuth } = useDerivAccount();
   const location = useLocation();
+
+  // If user clicked OAuth on localhost, we bounce here with ?patel_oauth_start=1
+  useEffect(() => {
+    const start = consumeOAuthStartFlag();
+    if (!start) return;
+    void loginWithDerivOAuth({
+      verifyAfter: start.verifyAfter,
+      returnTo: start.returnTo,
+      prompt: start.prompt,
+    });
+  }, [loginWithDerivOAuth]);
 
   if (isLoading) {
     return (
