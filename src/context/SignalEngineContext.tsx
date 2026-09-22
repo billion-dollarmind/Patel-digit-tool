@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useDerivWebSocket } from '@/hooks/useDerivWebSocket';
+import { useDerivMarket } from '@/context/DerivMarketContext';
 import { usePlatformAdmin } from '@/context/PlatformAdminContext';
 import {
   buildSignalFromTicks,
@@ -68,7 +68,7 @@ const loadSettings = (): EngineSettings => {
 };
 
 export const SignalEngineProvider = ({ children }: { children: ReactNode }) => {
-  const { tickData, isConnected } = useDerivWebSocket();
+  const { tickData, isConnected } = useDerivMarket();
   const { pushSignalToConnectedApps } = usePlatformAdmin();
   const [settings, setSettings] = useState<EngineSettings>(() => loadSettings());
   const [running, setRunning] = useState(false);

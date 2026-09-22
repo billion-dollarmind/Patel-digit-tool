@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { Wifi, WifiOff, Home, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useMemo, useEffect } from 'react';
-import { useDerivWebSocket } from '@/hooks/useDerivWebSocket';
+import { useDerivMarket } from '@/context/DerivMarketContext';
 import { useSignalCycle } from '@/hooks/useSignalCycle';
 import { usePerformanceTracking } from '@/hooks/usePerformanceTracking';
 import { analyzeOverUnder, getLastDigit } from '@/utils/predictions';
@@ -125,7 +125,7 @@ const OverUnderCard = ({ symbol, ticks, isConnected }: SignalCardProps) => {
 
 export const OverUnderSignals = () => {
   const navigate = useNavigate();
-  const { tickData, isConnected, symbols } = useDerivWebSocket();
+  const { tickData, isConnected, feedMode, symbols } = useDerivMarket();
   const { stats } = usePerformanceTracking();
 
   return (
@@ -161,7 +161,9 @@ export const OverUnderSignals = () => {
                 {isConnected ? (
                   <>
                     <Wifi className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-even" />
-                    <span className="text-[11px] sm:text-sm text-even font-medium hidden sm:inline">Connected</span>
+                    <span className="text-[11px] sm:text-sm text-even font-medium hidden sm:inline">
+                      {feedMode === 'demo' ? 'Demo feed' : 'Connected'}
+                    </span>
                   </>
                 ) : (
                   <>

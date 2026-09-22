@@ -11,6 +11,7 @@ export const SYMBOL_NAMES: Record<string, string> = {
   '1HZ10V': 'Volatility 10 (1s)',
   '1HZ25V': 'Volatility 25 (1s)',
   '1HZ50V': 'Volatility 50 (1s)',
+  '1HZ75V': 'Volatility 75 (1s)',
   '1HZ100V': 'Volatility 100 (1s)',
 };
 

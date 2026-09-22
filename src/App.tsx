@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { DerivAccountProvider, useDerivAccount } from "@/context/DerivAccountContext";
 import { SignalEngineProvider } from "@/context/SignalEngineContext";
 import { PlatformAdminProvider } from "@/context/PlatformAdminContext";
+import { DerivMarketProvider } from "@/context/DerivMarketContext";
 import { FeatureGate } from "@/components/FeatureGate";
 import { isOAuthCallbackLocation } from "@/lib/derivConfig";
 import { consumeOAuthStartFlag } from "@/lib/derivOAuth";
@@ -33,8 +34,9 @@ const queryClient = new QueryClient();
 
 const AuthenticatedApp = () => (
   <PlatformAdminProvider>
-    <SignalEngineProvider>
-      <Routes>
+    <DerivMarketProvider>
+      <SignalEngineProvider>
+        <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/dashboard" element={<Navigate to="/" replace />} />
         <Route
@@ -103,8 +105,9 @@ const AuthenticatedApp = () => (
         </Route>
 
         <Route path="*" element={<NotFound />} />
-      </Routes>
-    </SignalEngineProvider>
+        </Routes>
+      </SignalEngineProvider>
+    </DerivMarketProvider>
   </PlatformAdminProvider>
 );
 

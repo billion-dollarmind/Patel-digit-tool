@@ -3,6 +3,8 @@ import { Tick, estimateRecommendedRuns, getSignalHoldSeconds } from '@/utils/pre
 
 const SCAN_MIN = 8;
 const SCAN_SPAN = 15; // 8–22s scan windows stay staggered
+const MIN_TICKS_FOR_SIGNAL = 5;
+const MAX_SCAN_EXTEND_SEC = 45;
 
 type CyclePhase = 'collecting' | 'signal';
 
@@ -63,12 +65,19 @@ export const useSignalCycle = (ticks: Tick[], symbol = 'default') => {
   const scanDurationRef = useRef(initialScan);
   const signalDurationRef = useRef(getSignalHoldSeconds(8));
   const cycleIdRef = useRef(0);
+  const phaseRef = useRef<CyclePhase>('collecting');
+  const countdownRef = useRef(state.countdown);
   const ticksRef = useRef(ticks);
   ticksRef.current = ticks;
+  phaseRef.current = state.phase;
+  countdownRef.current = state.countdown;
 
   useEffect(() => {
     if (streamStartEpochRef.current == null && ticks.length > 0) {
-      streamStartEpochRef.current = ticks[ticks.length - 1].epoch;
+      // Prefer a baseline a bit before the newest tick so the first scan can use recent history
+      const newest = ticks[ticks.length - 1].epoch;
+      const oldestUseful = ticks[Math.max(0, ticks.length - 20)].epoch;
+      streamStartEpochRef.current = Math.min(oldestUseful, newest) - 1;
     }
   }, [ticks]);
 
@@ -79,10 +88,16 @@ export const useSignalCycle = (ticks: Tick[], symbol = 'default') => {
     scanDurationRef.current = scanDuration;
 
     const latest = ticksRef.current;
-    streamStartEpochRef.current = latest.length
-      ? latest[latest.length - 1].epoch
-      : Math.floor(Date.now() / 1000);
+    if (latest.length) {
+      // Keep a short lookback so we never start a cycle with an empty window
+      const lookback = latest[Math.max(0, latest.length - 8)].epoch - 1;
+      streamStartEpochRef.current = lookback;
+    } else {
+      streamStartEpochRef.current = Math.floor(Date.now() / 1000) - 1;
+    }
     cycleStartRef.current = Date.now();
+    phaseRef.current = 'collecting';
+    countdownRef.current = scanDuration;
     setCycleId(nextCycle);
     setState({
       phase: 'collecting',
@@ -98,19 +113,37 @@ export const useSignalCycle = (ticks: Tick[], symbol = 'default') => {
     const interval = setInterval(() => {
       const elapsed = Math.floor((Date.now() - cycleStartRef.current) / 1000);
       const currentTicks = ticksRef.current;
+      const phase = phaseRef.current;
 
-      if (state.phase === 'collecting') {
+      if (phase === 'collecting') {
         const duration = scanDurationRef.current;
         const remaining = duration - elapsed;
 
         if (remaining <= 0) {
           const baseline = streamStartEpochRef.current ?? 0;
           const scanned = currentTicks.filter((t) => t.epoch > baseline);
-          const captured = (scanned.length >= 5 ? scanned : currentTicks.slice(-15)).slice(-30);
+          const captured = (
+            scanned.length >= MIN_TICKS_FOR_SIGNAL
+              ? scanned
+              : currentTicks.slice(-20)
+          ).slice(-30);
 
-          streamStartEpochRef.current = captured.length
-            ? captured[0].epoch - 1
-            : streamStartEpochRef.current;
+          // Not enough market data yet — extend the scan instead of locking into empty "signal"
+          if (captured.length < MIN_TICKS_FOR_SIGNAL) {
+            if (elapsed < MAX_SCAN_EXTEND_SEC) {
+              const waitLeft = Math.max(1, Math.min(5, MAX_SCAN_EXTEND_SEC - elapsed));
+              if (waitLeft !== countdownRef.current) {
+                countdownRef.current = waitLeft;
+                setState((prev) => ({ ...prev, countdown: waitLeft }));
+              }
+              return;
+            }
+            // Hard cap: restart cycle and keep waiting for ticks
+            startNewCycle();
+            return;
+          }
+
+          streamStartEpochRef.current = captured[0].epoch - 1;
 
           const runs = estimateRecommendedRuns(captured);
           const stagger = pickStaggerSeconds(symbol, cycleIdRef.current);
@@ -119,6 +152,8 @@ export const useSignalCycle = (ticks: Tick[], symbol = 'default') => {
 
           cycleStartRef.current = Date.now();
           cycleIdRef.current += 1;
+          phaseRef.current = 'signal';
+          countdownRef.current = signalDuration;
           setCycleId(cycleIdRef.current);
           setState({
             phase: 'signal',
@@ -128,7 +163,8 @@ export const useSignalCycle = (ticks: Tick[], symbol = 'default') => {
             signalDuration,
             recommendedRuns: runs,
           });
-        } else if (remaining !== state.countdown) {
+        } else if (remaining !== countdownRef.current) {
+          countdownRef.current = remaining;
           setState((prev) => ({ ...prev, countdown: remaining }));
         }
       } else {
@@ -137,19 +173,21 @@ export const useSignalCycle = (ticks: Tick[], symbol = 'default') => {
 
         if (remaining <= 0) {
           startNewCycle();
-        } else if (remaining !== state.countdown) {
+        } else if (remaining !== countdownRef.current) {
+          countdownRef.current = remaining;
           setState((prev) => ({ ...prev, countdown: remaining }));
         }
       }
-    }, 100);
+    }, 200);
 
     return () => clearInterval(interval);
-  }, [state.phase, state.countdown, startNewCycle, symbol]);
+  }, [startNewCycle, symbol]);
 
   const liveCycleTicks = useMemo(() => {
     const baseline = streamStartEpochRef.current;
-    if (baseline == null) return [];
-    return ticks.filter((t) => t.epoch > baseline);
+    if (baseline == null) return ticks.slice(-15);
+    const filtered = ticks.filter((t) => t.epoch > baseline);
+    return filtered.length ? filtered : ticks.slice(-15);
   }, [ticks, cycleId]);
 
   return {
@@ -162,6 +200,6 @@ export const useSignalCycle = (ticks: Tick[], symbol = 'default') => {
     liveCycleTicks,
     cycleId,
     collectedCount: liveCycleTicks.length,
-    isReady: state.phase === 'signal' && state.signalTicks.length >= 5,
+    isReady: state.phase === 'signal' && state.signalTicks.length >= MIN_TICKS_FOR_SIGNAL,
   };
 };
