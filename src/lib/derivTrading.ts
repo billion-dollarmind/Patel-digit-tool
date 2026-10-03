@@ -56,12 +56,12 @@ let reqId = 1;
 /** Low-level Deriv WS client — legacy authorize token OR OAuth2 Bearer via OTP URL */
 export class DerivTradingClient {
   private ws: WebSocket | null = null;
+  private socketUrl: string | null = null;
   private pending = new Map<number, Pending>();
   private authorized: AuthorizeInfo | null = null;
   private token: string | null = null;
   private connectPromise: Promise<void> | null = null;
   private authMode: 'legacy' | 'oauth2' = 'legacy';
-  private lastUrl = DERIV_WS_URL;
 
   get account() {
     return this.authorized;
@@ -76,34 +76,40 @@ export class DerivTradingClient {
   }
 
   async connect(url = DERIV_WS_URL): Promise<void> {
-    this.lastUrl = url;
-    const current = this.ws as (WebSocket & { _patelUrl?: string }) | null;
-    if (current && (current.readyState === WebSocket.OPEN || current.readyState === WebSocket.CONNECTING)) {
-      if (current._patelUrl === url) {
-        if (current.readyState === WebSocket.OPEN) return;
-        if (this.connectPromise) return this.connectPromise;
-      } else {
-        current.onclose = null;
-        current.close();
-        if (this.ws === current) this.ws = null;
-      }
-    }
-    if (this.connectPromise) return this.connectPromise;
+    if (this.ws?.readyState === WebSocket.OPEN && this.socketUrl === url) return;
+    if (this.connectPromise && this.socketUrl === url) return this.connectPromise;
 
+    const previous = this.ws;
+    this.ws = null;
+    if (previous) {
+      previous.onopen = null;
+      previous.onerror = null;
+      previous.onclose = null;
+      previous.onmessage = null;
+      previous.close();
+    }
+
+    this.socketUrl = url;
     this.connectPromise = new Promise((resolve, reject) => {
-      const ws = new WebSocket(url) as WebSocket & { _patelUrl?: string };
-      ws._patelUrl = url;
+      const ws = new WebSocket(url);
       this.ws = ws;
 
-      ws.onopen = () => resolve();
-      ws.onerror = () => reject(new Error('Deriv WebSocket connection failed'));
+      ws.onopen = () => {
+        if (this.ws === ws) resolve();
+      };
+      ws.onerror = () => {
+        if (this.ws === ws) reject(new Error('Deriv WebSocket connection failed'));
+      };
       ws.onclose = () => {
+        // Ignore the close from a socket we already replaced.
         if (this.ws !== ws) return;
         this.ws = null;
         this.connectPromise = null;
         this.rejectAll(new Error('Deriv WebSocket closed'));
       };
-      ws.onmessage = (event) => this.handleMessage(event.data);
+      ws.onmessage = (event) => {
+        if (this.ws === ws) this.handleMessage(event.data);
+      };
     }).finally(() => {
       this.connectPromise = null;
     });
@@ -115,9 +121,15 @@ export class DerivTradingClient {
     this.token = null;
     this.authorized = null;
     this.authMode = 'legacy';
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
+    this.socketUrl = null;
+    const previous = this.ws;
+    this.ws = null;
+    if (previous) {
+      previous.onopen = null;
+      previous.onerror = null;
+      previous.onclose = null;
+      previous.onmessage = null;
+      previous.close();
     }
     this.rejectAll(new Error('Disconnected'));
   }
@@ -170,10 +182,7 @@ export class DerivTradingClient {
     try {
       balance = await this.getBalance();
     } catch {
-      // A rejected balance call can drop the OTP socket. Reopen it before any trade.
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        await this.connect(wsUrl);
-      }
+      // Some OTP sockets are already authed; balance may still work later
     }
 
     this.authorized = {
@@ -227,8 +236,10 @@ export class DerivTradingClient {
       basis: 'stake',
       contract_type: params.contractType,
       currency,
-      symbol: params.symbol,
     };
+    // New OAuth OTP socket uses underlying_symbol. Legacy public socket uses symbol.
+    if (this.authMode === 'oauth2') payload.underlying_symbol = params.symbol;
+    else payload.symbol = params.symbol;
 
     if (params.contractType === 'ACCU') {
       payload.growth_rate = params.growthRate ?? 0.01;
@@ -239,9 +250,6 @@ export class DerivTradingClient {
 
     if (params.barrier !== undefined && params.barrier !== '') {
       payload.barrier = String(params.barrier);
-    }
-    if (this.authMode === 'oauth2') {
-      payload.underlying_symbol = params.symbol;
     }
 
     const data = (await this.send(payload)) as {
@@ -345,8 +353,13 @@ export class DerivTradingClient {
 
   private async send(payload: Record<string, unknown>): Promise<unknown> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      await this.connect(this.lastUrl);
+      if (!this.socketUrl) throw new Error('WebSocket not connected');
+      await this.connect(this.socketUrl);
     }
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      throw new Error('WebSocket not connected');
+    }
+
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error('WebSocket not connected'));
