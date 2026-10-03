@@ -61,6 +61,7 @@ export class DerivTradingClient {
   private token: string | null = null;
   private connectPromise: Promise<void> | null = null;
   private authMode: 'legacy' | 'oauth2' = 'legacy';
+  private lastUrl = DERIV_WS_URL;
 
   get account() {
     return this.authorized;
@@ -75,11 +76,17 @@ export class DerivTradingClient {
   }
 
   async connect(url = DERIV_WS_URL): Promise<void> {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      // Reconnect if URL changed
-      if ((this.ws as WebSocket & { _patelUrl?: string })._patelUrl === url) return;
-      this.ws.close();
-      this.ws = null;
+    this.lastUrl = url;
+    const current = this.ws as (WebSocket & { _patelUrl?: string }) | null;
+    if (current && (current.readyState === WebSocket.OPEN || current.readyState === WebSocket.CONNECTING)) {
+      if (current._patelUrl === url) {
+        if (current.readyState === WebSocket.OPEN) return;
+        if (this.connectPromise) return this.connectPromise;
+      } else {
+        current.onclose = null;
+        current.close();
+        if (this.ws === current) this.ws = null;
+      }
     }
     if (this.connectPromise) return this.connectPromise;
 
@@ -91,6 +98,7 @@ export class DerivTradingClient {
       ws.onopen = () => resolve();
       ws.onerror = () => reject(new Error('Deriv WebSocket connection failed'));
       ws.onclose = () => {
+        if (this.ws !== ws) return;
         this.ws = null;
         this.connectPromise = null;
         this.rejectAll(new Error('Deriv WebSocket closed'));
@@ -162,7 +170,10 @@ export class DerivTradingClient {
     try {
       balance = await this.getBalance();
     } catch {
-      // Some OTP sockets are already authed; balance may still work later
+      // A rejected balance call can drop the OTP socket. Reopen it before any trade.
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        await this.connect(wsUrl);
+      }
     }
 
     this.authorized = {
@@ -228,6 +239,9 @@ export class DerivTradingClient {
 
     if (params.barrier !== undefined && params.barrier !== '') {
       payload.barrier = String(params.barrier);
+    }
+    if (this.authMode === 'oauth2') {
+      payload.underlying_symbol = params.symbol;
     }
 
     const data = (await this.send(payload)) as {
@@ -329,7 +343,10 @@ export class DerivTradingClient {
     }
   }
 
-  private send(payload: Record<string, unknown>): Promise<unknown> {
+  private async send(payload: Record<string, unknown>): Promise<unknown> {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      await this.connect(this.lastUrl);
+    }
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error('WebSocket not connected'));

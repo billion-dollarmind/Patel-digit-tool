@@ -28,6 +28,9 @@ export interface OAuthAccount {
   account: string;
   token: string;
   currency: string;
+  balance?: number;
+  /** Demo / DOT / VR accounts */
+  virtual?: boolean;
 }
 
 export interface OAuth2TokenSet {
@@ -518,6 +521,7 @@ export const fetchOAuth2Accounts = async (accessToken: string): Promise<OAuthAcc
       loginid?: string;
       balance?: string | number;
       currency?: string;
+      account_type?: string;
     }>;
     error?: { message?: string };
   };
@@ -531,11 +535,18 @@ export const fetchOAuth2Accounts = async (accessToken: string): Promise<OAuthAcc
     .map((row) => {
       const account = row.account_id || row.loginid || '';
       if (!account) return null;
+      const kind = String(row.account_type || '').toLowerCase();
+      const virtual =
+        kind === 'demo' ||
+        kind === 'virtual' ||
+        /^(DOT|VR|VRTC|VRW)/i.test(account);
+      const parsedBalance = row.balance == null || row.balance === '' ? undefined : Number(row.balance);
       return {
         account,
-        // OAuth2 uses Bearer + OTP; store access token reference per account slot
         token: accessToken,
         currency: (row.currency || 'USD').toUpperCase(),
+        virtual,
+        balance: Number.isFinite(parsedBalance) ? parsedBalance : undefined,
       } satisfies OAuthAccount;
     })
     .filter(Boolean) as OAuthAccount[];
@@ -565,6 +576,46 @@ export const fetchAuthenticatedWsUrl = async (accessToken: string, accountId: st
   }
 
   return payload.data.url;
+};
+
+/** Read one account balance over its OTP websocket. */
+export const fetchAccountBalance = async (accessToken: string, accountId: string): Promise<number | null> => {
+  const url = await fetchAuthenticatedWsUrl(accessToken, accountId);
+  return new Promise((resolve) => {
+    let settled = false;
+    let ws: WebSocket | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (value: number | null) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      try {
+        ws?.close();
+      } catch {
+        /* ignore */
+      }
+      resolve(value);
+    };
+    ws = new WebSocket(url);
+    timer = setTimeout(() => finish(null), 8000);
+    ws.onopen = () => ws.send(JSON.stringify({ balance: 1 }));
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data as string) as {
+          error?: { message?: string };
+          balance?: { balance?: number | string };
+        };
+        if (data.error) {
+          finish(null);
+          return;
+        }
+        if (data.balance?.balance != null) finish(Number(data.balance.balance));
+      } catch {
+        finish(null);
+      }
+    };
+    ws.onerror = () => finish(null);
+  });
 };
 
 /**

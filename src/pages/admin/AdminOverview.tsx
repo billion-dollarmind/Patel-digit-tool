@@ -1,12 +1,62 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePlatformAdmin } from '@/context/PlatformAdminContext';
 import { useDerivAccount } from '@/context/DerivAccountContext';
 import { FEATURE_CATALOG } from '@/lib/platformAdmin';
+import {
+  fetchAccountBalance,
+  fetchOAuth2Accounts,
+  loadOAuth2TokenSet,
+  type OAuthAccount,
+} from '@/lib/derivOAuth';
 
 export const AdminOverview = () => {
   const { state, activeSubscriberId, activeFeatures, setActiveSubscriber, toggleClientVisible } =
     usePlatformAdmin();
-  const { account, verified, lastVerification, clientId, appId, redirectUri } = useDerivAccount();
+  const { account, verified, lastVerification, oauthAccounts, token, clientId, appId, redirectUri } =
+    useDerivAccount();
+  const [walletRows, setWalletRows] = useState<OAuthAccount[]>(oauthAccounts);
+  const [balancesLoading, setBalancesLoading] = useState(false);
+
+  useEffect(() => {
+    const accessToken = loadOAuth2TokenSet()?.accessToken || token;
+    if (!accessToken) {
+      setWalletRows(oauthAccounts);
+      return;
+    }
+    let cancelled = false;
+    setBalancesLoading(true);
+    void (async () => {
+      let list = oauthAccounts;
+      try {
+        const fresh = await fetchOAuth2Accounts(accessToken);
+        if (fresh.length) list = fresh;
+      } catch {
+        /* keep the saved account list */
+      }
+      const withBalances = await Promise.all(
+        list.map(async (row) => {
+          if (row.balance != null && Number.isFinite(row.balance)) return row;
+          if (account && account.loginid.toLowerCase() === row.account.toLowerCase()) {
+            return { ...row, balance: account.balance, currency: account.currency || row.currency };
+          }
+          try {
+            const balance = await fetchAccountBalance(accessToken, row.account);
+            return balance == null ? row : { ...row, balance };
+          } catch {
+            return row;
+          }
+        })
+      );
+      if (!cancelled) {
+        setWalletRows(withBalances);
+        setBalancesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, oauthAccounts, account]);
   const approved = state.subscribers.filter((s) => s.status === 'approved').length;
   const pending = state.subscribers.filter((s) => s.status === 'pending').length;
   const activeApps = state.applications.filter((a) => a.active).length;
@@ -97,15 +147,46 @@ export const AdminOverview = () => {
         </div>
       </section>
 
-      <section className="glass rounded-2xl p-5 space-y-2 text-sm">
-        <h2 className="font-semibold">Deriv connection</h2>
-        {account ? (
-          <p>
-            Connected <span className="font-mono text-cyan-300">{account.loginid}</span> · {account.balance}{' '}
-            {account.currency} · {verified ? 'verification trade succeeded' : 'not verified'}
-          </p>
-        ) : (
+      <section className="glass rounded-2xl p-5 space-y-3 text-sm">
+        <h2 className="font-semibold">ROT and DOT balances</h2>
+        {walletRows.length === 0 ? (
           <p className="text-muted-foreground">No Deriv account connected in this browser.</p>
+        ) : (
+          <div className="space-y-2">
+            {walletRows.map((row) => {
+              const demo = row.virtual ?? /^(DOT|VR|VRTC|VRW)/i.test(row.account);
+              const active = account?.loginid?.toLowerCase() === row.account.toLowerCase();
+              return (
+                <div
+                  key={row.account}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/60 bg-background/40 px-3 py-2"
+                >
+                  <div>
+                    <p className="font-mono text-cyan-300">{row.account}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {/^DOT/i.test(row.account)
+                        ? 'DOT · demo'
+                        : /^ROT/i.test(row.account)
+                          ? 'ROT · real'
+                          : demo
+                            ? 'Demo'
+                            : 'Real'}
+                      {active ? ' · active' : ''}
+                    </p>
+                  </div>
+                  <p className="font-semibold">
+                    {row.balance == null ? (balancesLoading ? 'Loading…' : '—') : row.balance.toFixed(2)}{' '}
+                    {row.currency}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {account && (
+          <p className="text-xs text-muted-foreground">
+            Active login {account.loginid} · {verified ? 'verification trade succeeded' : 'not verified'}
+          </p>
         )}
         {lastVerification && (
           <p className="text-xs text-muted-foreground">{lastVerification.message}</p>
