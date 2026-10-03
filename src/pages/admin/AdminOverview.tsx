@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePlatformAdmin } from '@/context/PlatformAdminContext';
 import { useDerivAccount } from '@/context/DerivAccountContext';
+import { Button } from '@/components/ui/button';
 import { FEATURE_CATALOG } from '@/lib/platformAdmin';
 import {
   fetchAccountBalance,
@@ -9,14 +10,27 @@ import {
   loadOAuth2TokenSet,
   type OAuthAccount,
 } from '@/lib/derivOAuth';
+import { loadDerivLoginLog, rememberDerivLogins, type DerivLoginRecord } from '@/lib/derivLoginLog';
 
 export const AdminOverview = () => {
   const { state, activeSubscriberId, activeFeatures, setActiveSubscriber, toggleClientVisible } =
     usePlatformAdmin();
-  const { account, verified, lastVerification, oauthAccounts, token, clientId, appId, redirectUri } =
-    useDerivAccount();
+  const {
+    account,
+    verified,
+    lastVerification,
+    oauthAccounts,
+    token,
+    clientId,
+    appId,
+    redirectUri,
+    switchOAuthAccount,
+    verifying,
+  } = useDerivAccount();
   const [walletRows, setWalletRows] = useState<OAuthAccount[]>(oauthAccounts);
   const [balancesLoading, setBalancesLoading] = useState(false);
+  const [loginLog, setLoginLog] = useState<DerivLoginRecord[]>(() => loadDerivLoginLog());
+  const [picking, setPicking] = useState('');
 
   useEffect(() => {
     const accessToken = loadOAuth2TokenSet()?.accessToken || token;
@@ -50,6 +64,16 @@ export const AdminOverview = () => {
       );
       if (!cancelled) {
         setWalletRows(withBalances);
+        setLoginLog(
+          rememberDerivLogins(
+            withBalances.map((row) => ({
+              loginid: row.account,
+              currency: row.currency,
+              balance: row.balance,
+              virtual: row.virtual ?? /^(DOT|VR|VRTC|VRW)/i.test(row.account),
+            }))
+          )
+        );
         setBalancesLoading(false);
       }
     })();
@@ -174,20 +198,59 @@ export const AdminOverview = () => {
                       {active ? ' · active' : ''}
                     </p>
                   </div>
-                  <p className="font-semibold">
-                    {row.balance == null ? (balancesLoading ? 'Loading…' : '—') : row.balance.toFixed(2)}{' '}
-                    {row.currency}
-                  </p>
+                  <div className="flex items-center gap-3">
+                    <p className="font-semibold">
+                      {row.balance == null ? (balancesLoading ? 'Loading…' : '—') : row.balance.toFixed(2)}{' '}
+                      {row.currency}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant={active ? 'default' : 'outline'}
+                      disabled={verifying || picking === row.account}
+                      onClick={() => {
+                        setPicking(row.account);
+                        void switchOAuthAccount(row, false).finally(() => setPicking(''));
+                      }}
+                    >
+                      {active ? 'Trading here' : 'Use for trades'}
+                    </Button>
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
-        {account && (
+        <p className="text-xs text-muted-foreground">
+          Trades from Speed Bot, Accumulators, and Bot Builder use the account marked Trading here.
+          {account ? ` Active login ${account.loginid}.` : ''}{' '}
+          {verified ? 'Verification trade succeeded.' : 'Not verified.'}
+        </p>
+        <div className="pt-2 space-y-2">
+          <h3 className="font-semibold">Deriv logins saved on this browser</h3>
           <p className="text-xs text-muted-foreground">
-            Active login {account.loginid} · {verified ? 'verification trade succeeded' : 'not verified'}
+            This list is only people who signed in with Deriv on this browser. Phones and other computers are not included.
           </p>
-        )}
+          {loginLog.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No Deriv logins saved yet.</p>
+          ) : (
+            loginLog.map((row) => (
+              <div
+                key={row.loginid}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/50 px-3 py-2"
+              >
+                <div>
+                  <p className="font-mono text-cyan-300">{row.loginid}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {row.virtual ? 'Demo' : 'Real'} · {new Date(row.at).toLocaleString()}
+                  </p>
+                </div>
+                <p className="font-semibold">
+                  {row.balance == null ? '—' : row.balance.toFixed(2)} {row.currency}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
         {lastVerification && (
           <p className="text-xs text-muted-foreground">{lastVerification.message}</p>
         )}

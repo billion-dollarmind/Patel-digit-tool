@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { rememberDerivLogins } from '@/lib/derivLoginLog';
 import {
   tradingClient,
   VERIFY_STAKE,
@@ -179,6 +180,14 @@ export const DerivAccountProvider = ({ children }: { children: ReactNode }) => {
 
         if (!runTrade) {
           const info = await connectOnly(trimmed, opts);
+          rememberDerivLogins([
+            {
+              loginid: info.loginid,
+              currency: info.currency,
+              balance: info.balance,
+              virtual: /^(DOT|VR|VRTC|VRW)/i.test(info.loginid),
+            },
+          ]);
           const result: VerificationResult = {
             ok: true,
             message: `Connected ${info.loginid} (verification trade skipped)`,
@@ -193,6 +202,14 @@ export const DerivAccountProvider = ({ children }: { children: ReactNode }) => {
         const result = await tradingClient.runVerificationTrade(trimmed, opts);
         setLastVerification(result);
         if (result.ok && result.authorize) {
+          rememberDerivLogins([
+            {
+              loginid: result.authorize.loginid,
+              currency: result.authorize.currency,
+              balance: result.authorize.balance,
+              virtual: /^(DOT|VR|VRTC|VRW)/i.test(result.authorize.loginid),
+            },
+          ]);
           localStorage.setItem(TOKEN_KEY, trimmed);
           if (opts?.accountId) localStorage.setItem(ACTIVE_ACCOUNT_KEY, opts.accountId);
           setToken(trimmed);
@@ -308,8 +325,10 @@ export const DerivAccountProvider = ({ children }: { children: ReactNode }) => {
         const intent = loadOAuthIntent();
         const verifyAfter = opts?.verifyAfter ?? intent?.verifyAfter ?? true;
 
+        const savedActive = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
         const selected =
           accounts.find((a) => a.account === opts?.selectedAccountId) ||
+          accounts.find((a) => a.account === savedActive) ||
           pickDefaultOAuthAccount(accounts);
 
         if (!selected) {
