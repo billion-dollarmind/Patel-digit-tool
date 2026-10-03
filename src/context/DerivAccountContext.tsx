@@ -29,7 +29,7 @@ import {
   loadOAuthAccounts,
   loadOAuthIntent,
   loadOAuth2TokenSet,
-  pickDefaultOAuthAccount,
+  pickTradeAccount,
   saveOAuthAccounts,
   startDerivOAuth,
   type OAuthAccount,
@@ -325,11 +325,9 @@ export const DerivAccountProvider = ({ children }: { children: ReactNode }) => {
         const intent = loadOAuthIntent();
         const verifyAfter = opts?.verifyAfter ?? intent?.verifyAfter ?? true;
 
-        const savedActive = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
         const selected =
           accounts.find((a) => a.account === opts?.selectedAccountId) ||
-          accounts.find((a) => a.account === savedActive) ||
-          pickDefaultOAuthAccount(accounts);
+          pickTradeAccount(accounts);
 
         if (!selected) {
           const fail: VerificationResult = { ok: false, message: 'Could not select an account' };

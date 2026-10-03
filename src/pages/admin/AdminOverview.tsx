@@ -7,8 +7,13 @@ import { FEATURE_CATALOG } from '@/lib/platformAdmin';
 import {
   fetchAccountBalance,
   fetchOAuth2Accounts,
+  isDemoAccount,
   loadOAuth2TokenSet,
+  loadTradeWalletMode,
+  pickTradeAccount,
+  saveTradeWalletMode,
   type OAuthAccount,
+  type TradeWalletMode,
 } from '@/lib/derivOAuth';
 import { loadDerivLoginLog, rememberDerivLogins, type DerivLoginRecord } from '@/lib/derivLoginLog';
 
@@ -31,6 +36,7 @@ export const AdminOverview = () => {
   const [balancesLoading, setBalancesLoading] = useState(false);
   const [loginLog, setLoginLog] = useState<DerivLoginRecord[]>(() => loadDerivLoginLog());
   const [picking, setPicking] = useState('');
+  const [tradeMode, setTradeMode] = useState<TradeWalletMode>(() => loadTradeWalletMode());
 
   useEffect(() => {
     const accessToken = loadOAuth2TokenSet()?.accessToken || token;
@@ -50,16 +56,13 @@ export const AdminOverview = () => {
       }
       const withBalances = await Promise.all(
         list.map(async (row) => {
-          if (row.balance != null && Number.isFinite(row.balance)) return row;
-          if (account && account.loginid.toLowerCase() === row.account.toLowerCase()) {
-            return { ...row, balance: account.balance, currency: account.currency || row.currency };
-          }
           try {
             const balance = await fetchAccountBalance(accessToken, row.account);
-            return balance == null ? row : { ...row, balance };
+            if (balance != null && Number.isFinite(balance)) return { ...row, balance };
           } catch {
-            return row;
+            /* keep the list balance if the live read fails */
           }
+          return row;
         })
       );
       if (!cancelled) {
@@ -80,7 +83,7 @@ export const AdminOverview = () => {
     return () => {
       cancelled = true;
     };
-  }, [token, oauthAccounts, account]);
+  }, [token, oauthAccounts]);
   const approved = state.subscribers.filter((s) => s.status === 'approved').length;
   const pending = state.subscribers.filter((s) => s.status === 'pending').length;
   const activeApps = state.applications.filter((a) => a.active).length;
@@ -172,7 +175,33 @@ export const AdminOverview = () => {
       </section>
 
       <section className="glass rounded-2xl p-5 space-y-3 text-sm">
-        <h2 className="font-semibold">ROT and DOT balances</h2>
+        <h2 className="font-semibold">Trade on demo or real</h2>
+        <p className="text-xs text-muted-foreground">
+          Pick the wallet that places trades. Demo is DOT. Real is ROT. This does not follow the balance number.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {(['demo', 'real'] as TradeWalletMode[]).map((mode) => {
+            const target = pickTradeAccount(walletRows, mode);
+            const on = tradeMode === mode;
+            return (
+              <Button
+                key={mode}
+                variant={on ? 'default' : 'outline'}
+                disabled={!target || verifying || picking === mode}
+                onClick={() => {
+                  if (!target) return;
+                  setPicking(mode);
+                  saveTradeWalletMode(mode);
+                  setTradeMode(mode);
+                  void switchOAuthAccount(target, false).finally(() => setPicking(''));
+                }}
+              >
+                {mode === 'demo' ? 'Use demo (DOT)' : 'Use real (ROT)'}
+                {target ? ` · ${target.account}` : ' · not connected'}
+              </Button>
+            );
+          })}
+        </div>
         {walletRows.length === 0 ? (
           <p className="text-muted-foreground">No Deriv account connected in this browser.</p>
         ) : (
@@ -208,7 +237,10 @@ export const AdminOverview = () => {
                       variant={active ? 'default' : 'outline'}
                       disabled={verifying || picking === row.account}
                       onClick={() => {
+                        const mode: TradeWalletMode = isDemoAccount(row) ? 'demo' : 'real';
                         setPicking(row.account);
+                        saveTradeWalletMode(mode);
+                        setTradeMode(mode);
                         void switchOAuthAccount(row, false).finally(() => setPicking(''));
                       }}
                     >

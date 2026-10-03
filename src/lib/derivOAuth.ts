@@ -24,6 +24,37 @@ export {
   isOAuthCallbackLocation,
 } from '@/lib/derivConfig';
 
+const TRADE_MODE_KEY = 'patel-trade-mode';
+
+export type TradeWalletMode = 'demo' | 'real';
+
+export const loadTradeWalletMode = (): TradeWalletMode => {
+  try {
+    return localStorage.getItem(TRADE_MODE_KEY) === 'demo' ? 'demo' : 'real';
+  } catch {
+    return 'real';
+  }
+};
+
+export const saveTradeWalletMode = (mode: TradeWalletMode) => {
+  localStorage.setItem(TRADE_MODE_KEY, mode);
+};
+
+export const isDemoAccount = (account: { account: string; virtual?: boolean }) =>
+  account.virtual === true || /^(DOT|VR|VRTC|VRW)/i.test(account.account);
+
+/** Admin choice: demo (DOT) or real (ROT/CR), not whichever balance happens to display. */
+export const pickTradeAccount = (
+  accounts: OAuthAccount[],
+  mode: TradeWalletMode = loadTradeWalletMode()
+): OAuthAccount | null => {
+  if (!accounts.length) return null;
+  const demo = accounts.find((a) => isDemoAccount(a));
+  const real = accounts.find((a) => !isDemoAccount(a));
+  if (mode === 'demo') return demo || real || accounts[0];
+  return real || demo || accounts[0];
+};
+
 export interface OAuthAccount {
   account: string;
   token: string;
