@@ -1,3 +1,5 @@
+import { publishLogins } from '@/lib/loginRegistry';
+
 const LOG_KEY = 'patel-deriv-login-log';
 
 export interface DerivLoginRecord {
@@ -38,5 +40,8 @@ export const rememberDerivLogins = (
   }
   const next = Array.from(byId.values()).sort((a, b) => b.at - a.at).slice(0, 100);
   localStorage.setItem(LOG_KEY, JSON.stringify(next));
+  void publishLogins(next).catch(() => {
+    /* this browser still has the copy if the database is unreachable */
+  });
   return next;
 };

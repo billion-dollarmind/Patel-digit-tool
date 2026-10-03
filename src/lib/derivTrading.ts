@@ -1,5 +1,12 @@
 import { DERIV_WS_URL } from '@/lib/derivConfig';
-import { fetchAuthenticatedWsUrl, isBearerAccessToken } from '@/lib/derivOAuth';
+import {
+  assertOtpMatchesMode,
+  fetchAuthenticatedWsUrl,
+  isBearerAccessToken,
+  loadPersistedOAuthAccounts,
+  loadTradeWalletMode,
+  pickTradeAccount,
+} from '@/lib/derivOAuth';
 
 export const VERIFY_STAKE = 0.35;
 export const VERIFY_SYMBOL = 'R_10';
@@ -37,6 +44,7 @@ export interface BuyResult {
   payout: number;
   transactionId: number;
   longcode?: string;
+  loginid?: string;
 }
 
 export interface VerificationResult {
@@ -91,7 +99,7 @@ export class DerivTradingClient {
     }
 
     this.socketUrl = url;
-    this.connectPromise = new Promise((resolve, reject) => {
+    this.connectPromise = new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(url);
       this.ws = ws;
 
@@ -302,9 +310,32 @@ export class DerivTradingClient {
     }
 
     const oauth = this.authMode === 'oauth2';
+    const mode = loadTradeWalletMode();
+    const accounts = loadPersistedOAuthAccounts();
+    const picked = accounts.length ? pickTradeAccount(accounts, mode) : null;
+    if (accounts.length && !picked) {
+      throw new Error(
+        mode === 'real'
+          ? 'No real ROT account is selected. This trade was not sent to the demo wallet.'
+          : 'No demo DOT account is selected. This trade was not sent.'
+      );
+    }
+    if (picked) {
+      this.accountId = picked.account;
+      this.authorized = {
+        ...this.authorized,
+        loginid: picked.account,
+        currency: picked.currency || this.authorized.currency,
+      };
+      if (!oauth && picked.token && !isBearerAccessToken(picked.token)) {
+        this.token = picked.token;
+      }
+    }
+
     const url = oauth
       ? await fetchAuthenticatedWsUrl(this.token, this.accountId || this.authorized.loginid)
       : DERIV_WS_URL;
+    if (oauth) assertOtpMatchesMode(url, mode);
 
     return this.orderOnFreshSocket(url, params, oauth);
   }
@@ -454,6 +485,7 @@ export class DerivTradingClient {
               payout: Number(bought.buy.payout),
               transactionId: bought.buy.transaction_id,
               longcode: bought.buy.longcode,
+              loginid: this.accountId || this.authorized?.loginid,
             });
           } catch (err) {
             fail(err instanceof Error ? err : new Error('Trade failed'));
@@ -478,7 +510,7 @@ export class DerivTradingClient {
       });
       return {
         ok: true,
-        message: `Verified ${authorize.loginid} — DIGITODD $${VERIFY_STAKE} on ${VERIFY_SYMBOL} (#${buy.contractId})`,
+        message: `Verified ${buy.loginid || authorize.loginid} — DIGITODD $${VERIFY_STAKE} on ${VERIFY_SYMBOL} (#${buy.contractId})`,
         authorize,
         buy,
       };

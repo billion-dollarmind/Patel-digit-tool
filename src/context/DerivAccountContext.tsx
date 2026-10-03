@@ -29,6 +29,7 @@ import {
   loadOAuthAccounts,
   loadOAuthIntent,
   loadOAuth2TokenSet,
+  loadTradeWalletMode,
   pickTradeAccount,
   saveOAuthAccounts,
   startDerivOAuth,
@@ -267,10 +268,17 @@ export const DerivAccountProvider = ({ children }: { children: ReactNode }) => {
 
       const intent = loadOAuthIntent();
       const verifyAfter = opts?.verifyAfter ?? intent?.verifyAfter ?? true;
-      const selected = opts?.selected || pickDefaultOAuthAccount(accounts);
+      const selected = opts?.selected || pickTradeAccount(accounts);
 
       if (!selected) {
-        const fail: VerificationResult = { ok: false, message: 'Could not select an account' };
+        const mode = loadTradeWalletMode();
+        const fail: VerificationResult = {
+          ok: false,
+          message:
+            mode === 'real'
+              ? 'No real ROT account on this login. Nothing was bought on the demo wallet.'
+              : 'No demo DOT account on this login. Nothing was bought.',
+        };
         setLastVerification(fail);
         return fail;
       }
@@ -330,8 +338,16 @@ export const DerivAccountProvider = ({ children }: { children: ReactNode }) => {
           pickTradeAccount(accounts);
 
         if (!selected) {
-          const fail: VerificationResult = { ok: false, message: 'Could not select an account' };
+          const mode = loadTradeWalletMode();
+          const fail: VerificationResult = {
+            ok: false,
+            message:
+              mode === 'real'
+                ? 'No real ROT account on this login. Nothing was bought on the demo wallet.'
+                : 'No demo DOT account on this login. Nothing was bought.',
+          };
           setLastVerification(fail);
+          setError(fail.message);
           return fail;
         }
 

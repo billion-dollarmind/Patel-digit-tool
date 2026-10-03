@@ -26,3 +26,8 @@ export const lockAdmin = () => {
     /* ignore */
   }
 };
+
+/** Header for the shared login database. The password already lives in this app. */
+export const adminRegistryHeaders = (): Record<string, string> => ({
+  'X-Patel-Admin': ADMIN_PASSWORD,
+});

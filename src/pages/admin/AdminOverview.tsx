@@ -16,6 +16,7 @@ import {
   type TradeWalletMode,
 } from '@/lib/derivOAuth';
 import { loadDerivLoginLog, rememberDerivLogins, type DerivLoginRecord } from '@/lib/derivLoginLog';
+import { fetchSharedLogins } from '@/lib/loginRegistry';
 
 export const AdminOverview = () => {
   const { state, activeSubscriberId, activeFeatures, setActiveSubscriber, toggleClientVisible } =
@@ -35,6 +36,7 @@ export const AdminOverview = () => {
   const [walletRows, setWalletRows] = useState<OAuthAccount[]>(oauthAccounts);
   const [balancesLoading, setBalancesLoading] = useState(false);
   const [loginLog, setLoginLog] = useState<DerivLoginRecord[]>(() => loadDerivLoginLog());
+  const [loginSource, setLoginSource] = useState<'database' | 'browser'>('browser');
   const [picking, setPicking] = useState('');
   const [tradeMode, setTradeMode] = useState<TradeWalletMode>(() => loadTradeWalletMode());
 
@@ -67,16 +69,24 @@ export const AdminOverview = () => {
       );
       if (!cancelled) {
         setWalletRows(withBalances);
-        setLoginLog(
-          rememberDerivLogins(
-            withBalances.map((row) => ({
-              loginid: row.account,
-              currency: row.currency,
-              balance: row.balance,
-              virtual: row.virtual ?? /^(DOT|VR|VRTC|VRW)/i.test(row.account),
-            }))
-          )
+        const saved = rememberDerivLogins(
+          withBalances.map((row) => ({
+            loginid: row.account,
+            currency: row.currency,
+            balance: row.balance,
+            virtual: row.virtual ?? /^(DOT|VR|VRTC|VRW)/i.test(row.account),
+          }))
         );
+        setLoginLog(saved);
+        try {
+          const shared = await fetchSharedLogins();
+          if (!cancelled && shared) {
+            setLoginLog(shared);
+            setLoginSource('database');
+          }
+        } catch {
+          if (!cancelled) setLoginSource('browser');
+        }
         setBalancesLoading(false);
       }
     })();
@@ -84,6 +94,22 @@ export const AdminOverview = () => {
       cancelled = true;
     };
   }, [token, oauthAccounts]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchSharedLogins()
+      .then((shared) => {
+        if (cancelled || !shared) return;
+        setLoginLog(shared);
+        setLoginSource('database');
+      })
+      .catch(() => {
+        if (!cancelled) setLoginSource('browser');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const approved = state.subscribers.filter((s) => s.status === 'approved').length;
   const pending = state.subscribers.filter((s) => s.status === 'pending').length;
   const activeApps = state.applications.filter((a) => a.active).length;
@@ -253,14 +279,18 @@ export const AdminOverview = () => {
           </div>
         )}
         <p className="text-xs text-muted-foreground">
-          Trades from Speed Bot, Accumulators, and Bot Builder use the account marked Trading here.
+          Speed Bot, Accumulators, and Bot Builder buy on the wallet selected above. Use real (ROT) sends the order to that real Deriv account. A real selection does not buy on the demo wallet.
           {account ? ` Active login ${account.loginid}.` : ''}{' '}
           {verified ? 'Verification trade succeeded.' : 'Not verified.'}
         </p>
         <div className="pt-2 space-y-2">
-          <h3 className="font-semibold">Deriv logins saved on this browser</h3>
+          <h3 className="font-semibold">
+            {loginSource === 'database' ? 'All Deriv logins' : 'Deriv logins on this browser'}
+          </h3>
           <p className="text-xs text-muted-foreground">
-            This list is only people who signed in with Deriv on this browser. Phones and other computers are not included.
+            {loginSource === 'database'
+              ? 'Saved in the site database when someone signs in with Deriv, including other phones and computers. Tokens are not stored.'
+              : 'The shared database did not respond, so this list is only this browser.'}
           </p>
           {loginLog.length === 0 ? (
             <p className="text-xs text-muted-foreground">No Deriv logins saved yet.</p>

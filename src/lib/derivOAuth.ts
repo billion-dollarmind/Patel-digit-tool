@@ -43,7 +43,25 @@ export const saveTradeWalletMode = (mode: TradeWalletMode) => {
 export const isDemoAccount = (account: { account: string; virtual?: boolean }) =>
   account.virtual === true || /^(DOT|VR|VRTC|VRW)/i.test(account.account);
 
-/** Admin choice: demo (DOT) or real (ROT/CR), not whichever balance happens to display. */
+const ACCOUNT_LIST_KEY = 'patel-deriv-oauth-account-list';
+
+/** Accounts saved after Deriv login. Used when an order must pick demo or real. */
+export const loadPersistedOAuthAccounts = (): OAuthAccount[] => {
+  try {
+    const raw = localStorage.getItem(ACCOUNT_LIST_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as OAuthAccount[];
+      if (Array.isArray(parsed) && parsed.length) return parsed;
+    }
+  } catch {
+    /* ignore */
+  }
+  return loadOAuthAccounts();
+};
+
+/**
+ * The wallet the admin chose. Demo never substitutes for real, and real never substitutes for demo.
+ */
 export const pickTradeAccount = (
   accounts: OAuthAccount[],
   mode: TradeWalletMode = loadTradeWalletMode()
@@ -51,8 +69,24 @@ export const pickTradeAccount = (
   if (!accounts.length) return null;
   const demo = accounts.find((a) => isDemoAccount(a));
   const real = accounts.find((a) => !isDemoAccount(a));
-  if (mode === 'demo') return demo || real || accounts[0];
-  return real || demo || accounts[0];
+  return mode === 'demo' ? demo || null : real || null;
+};
+
+/** OTP urls are /ws/demo or /ws/real. Refuse a buy that would hit the other wallet. */
+export const assertOtpMatchesMode = (url: string, mode: TradeWalletMode) => {
+  const demoSocket = /\/ws\/demo(?:[/?]|$)/i.test(url);
+  const realSocket = /\/ws\/real(?:[/?]|$)/i.test(url);
+  if (mode === 'real' && demoSocket) {
+    throw new Error(
+      'Trade blocked. Deriv opened the demo wallet, so nothing was bought on the virtual account.'
+    );
+  }
+  if (mode === 'demo' && realSocket) {
+    throw new Error('Trade blocked. Deriv opened the real wallet, so nothing was bought.');
+  }
+  if (mode === 'real' && !realSocket && !demoSocket) {
+    throw new Error('Trade blocked. Deriv did not confirm this order is on the real wallet.');
+  }
 };
 
 export interface OAuthAccount {

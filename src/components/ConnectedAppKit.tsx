@@ -69,7 +69,7 @@ export function useConnectedAppTrader({
             id: `${buy.contractId}`,
             at: Date.now(),
             ok: true,
-            message: `Bought ${trade.contractType} ${trade.symbol} #${buy.contractId} @ ${buy.buyPrice}`,
+            message: `Bought ${trade.contractType} ${trade.symbol} on ${buy.loginid || account.loginid} #${buy.contractId} @ ${buy.buyPrice}`,
           },
           ...prev,
         ].slice(0, 40));
