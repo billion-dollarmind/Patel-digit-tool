@@ -60,6 +60,7 @@ export class DerivTradingClient {
   private pending = new Map<number, Pending>();
   private authorized: AuthorizeInfo | null = null;
   private token: string | null = null;
+  private accountId: string | null = null;
   private connectPromise: Promise<void> | null = null;
   private authMode: 'legacy' | 'oauth2' = 'legacy';
 
@@ -119,6 +120,7 @@ export class DerivTradingClient {
 
   disconnect() {
     this.token = null;
+    this.accountId = null;
     this.authorized = null;
     this.authMode = 'legacy';
     this.socketUrl = null;
@@ -157,6 +159,7 @@ export class DerivTradingClient {
       throw new Error(data.error?.message || 'Authorization failed');
     }
 
+    this.accountId = data.authorize.loginid;
     this.authorized = {
       loginid: data.authorize.loginid,
       balance: Number(data.authorize.balance),
@@ -167,27 +170,18 @@ export class DerivTradingClient {
     return this.authorized;
   }
 
-  /** OAuth2: OTP → authenticated WS (no legacy authorize message) */
+  /** OAuth2 session only. The trading socket is opened later, once per order. */
   async authorizeOAuth2(
     accessToken: string,
     accountId: string,
     meta?: { currency?: string; balance?: number }
   ): Promise<AuthorizeInfo> {
-    const wsUrl = await fetchAuthenticatedWsUrl(accessToken, accountId);
-    await this.connect(wsUrl);
     this.token = accessToken;
+    this.accountId = accountId;
     this.authMode = 'oauth2';
-
-    let balance = meta?.balance ?? 0;
-    try {
-      balance = await this.getBalance();
-    } catch {
-      // Some OTP sockets are already authed; balance may still work later
-    }
-
     this.authorized = {
       loginid: accountId,
-      balance,
+      balance: meta?.balance ?? 0,
       currency: meta?.currency || 'USD',
     };
     return this.authorized;
@@ -303,9 +297,170 @@ export class DerivTradingClient {
     barrier?: string | number;
     growthRate?: number;
   }): Promise<BuyResult> {
-    if (!this.authorized) throw new Error('Not authorized — connect a Deriv token first');
-    const proposal = await this.propose(params);
-    return this.buy(proposal.id, proposal.askPrice);
+    if (!this.token || !this.authorized) {
+      throw new Error('Not authorized — connect a Deriv token first');
+    }
+
+    const oauth = this.authMode === 'oauth2';
+    const url = oauth
+      ? await fetchAuthenticatedWsUrl(this.token, this.accountId || this.authorized.loginid)
+      : DERIV_WS_URL;
+
+    return this.orderOnFreshSocket(url, params, oauth);
+  }
+
+  /** One OTP (or public) socket per order. Proposal is sent only after onopen; buy stays on that socket. */
+  private orderOnFreshSocket(
+    url: string,
+    params: {
+      contractType: DigitContractType;
+      symbol: string;
+      amount: number;
+      duration?: number;
+      durationUnit?: 't' | 's' | 'm';
+      barrier?: string | number;
+      growthRate?: number;
+    },
+    oauth: boolean
+  ): Promise<BuyResult> {
+    const token = this.token;
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(url);
+      const pending = new Map<number, Pending>();
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
+      const closeSocket = () => {
+        ws.onopen = null;
+        ws.onerror = null;
+        ws.onclose = null;
+        ws.onmessage = null;
+        try {
+          ws.close();
+        } catch {
+          /* ignore */
+        }
+      };
+
+      const fail = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        pending.forEach((item) => item.reject(error));
+        pending.clear();
+        closeSocket();
+        reject(error);
+      };
+
+      const succeed = (buy: BuyResult) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        closeSocket();
+        resolve(buy);
+      };
+
+      const send = (payload: Record<string, unknown>) =>
+        new Promise<Record<string, unknown>>((res, rej) => {
+          if (ws.readyState !== WebSocket.OPEN) {
+            rej(new Error('WebSocket not connected'));
+            return;
+          }
+          const id = reqId++;
+          pending.set(id, {
+            resolve: (value) => res(value as Record<string, unknown>),
+            reject: rej,
+          });
+          ws.send(JSON.stringify({ ...payload, req_id: id }));
+        });
+
+      timer = setTimeout(() => fail(new Error('Deriv request timed out')), 20000);
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data as string) as { req_id?: number };
+          if (data.req_id == null) return;
+          const waiter = pending.get(data.req_id);
+          if (!waiter) return;
+          pending.delete(data.req_id);
+          waiter.resolve(data);
+        } catch {
+          /* ignore malformed */
+        }
+      };
+      ws.onerror = () => fail(new Error('Deriv WebSocket connection failed'));
+      ws.onclose = () => {
+        if (!settled) fail(new Error('Deriv WebSocket closed'));
+      };
+      ws.onopen = () => {
+        void (async () => {
+          try {
+            if (!oauth) {
+              const auth = (await send({ authorize: token })) as {
+                error?: { message?: string };
+                authorize?: { balance?: number; currency?: string };
+              };
+              if (auth.error || !auth.authorize) {
+                throw new Error(auth.error?.message || 'Authorization failed');
+              }
+            }
+
+            const currency = this.authorized?.currency || 'USD';
+            const proposalPayload: Record<string, unknown> = {
+              proposal: 1,
+              amount: params.amount,
+              basis: 'stake',
+              contract_type: params.contractType,
+              currency,
+            };
+            if (oauth) proposalPayload.underlying_symbol = params.symbol;
+            else proposalPayload.symbol = params.symbol;
+            if (params.contractType === 'ACCU') {
+              proposalPayload.growth_rate = params.growthRate ?? 0.01;
+            } else {
+              proposalPayload.duration = params.duration ?? 1;
+              proposalPayload.duration_unit = params.durationUnit ?? 't';
+            }
+            if (params.barrier !== undefined && params.barrier !== '') {
+              proposalPayload.barrier = String(params.barrier);
+            }
+
+            const proposal = (await send(proposalPayload)) as {
+              error?: { message?: string };
+              proposal?: { id: string; ask_price: number };
+            };
+            if (proposal.error || !proposal.proposal?.id) {
+              throw new Error(proposal.error?.message || 'Proposal failed');
+            }
+
+            const price = Number(proposal.proposal.ask_price);
+            const bought = (await send({ buy: proposal.proposal.id, price })) as {
+              error?: { message?: string };
+              buy?: {
+                contract_id: number;
+                buy_price: number;
+                payout: number;
+                transaction_id: number;
+                longcode?: string;
+              };
+            };
+            if (bought.error || !bought.buy) {
+              throw new Error(bought.error?.message || 'Buy failed');
+            }
+
+            succeed({
+              contractId: bought.buy.contract_id,
+              buyPrice: Number(bought.buy.buy_price),
+              payout: Number(bought.buy.payout),
+              transactionId: bought.buy.transaction_id,
+              longcode: bought.buy.longcode,
+            });
+          } catch (err) {
+            fail(err instanceof Error ? err : new Error('Trade failed'));
+          }
+        })();
+      };
+    });
   }
 
   async runVerificationTrade(
@@ -321,7 +476,6 @@ export class DerivTradingClient {
         duration: 1,
         durationUnit: 't',
       });
-      await this.getBalance().catch(() => undefined);
       return {
         ok: true,
         message: `Verified ${authorize.loginid} — DIGITODD $${VERIFY_STAKE} on ${VERIFY_SYMBOL} (#${buy.contractId})`,
