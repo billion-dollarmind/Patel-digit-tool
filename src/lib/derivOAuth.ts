@@ -52,6 +52,8 @@ const PKCE_VERIFIER_KEY = 'patel-oauth2-code-verifier';
 const PKCE_STATE_KEY = 'patel-oauth2-state';
 const PKCE_TS_KEY = 'patel-oauth2-pkce-ts';
 const OAUTH2_TOKEN_KEY = 'patel-oauth2-token-set';
+/** Raw access token, same role as Matches Vision's mv_authToken */
+export const AUTH_TOKEN_KEY = 'mv_authToken';
 const OAUTH_START_FLAG = 'patel_oauth_start';
 const PKCE_TTL_MS = 10 * 60 * 1000;
 
@@ -237,24 +239,38 @@ export const clearOAuthAccounts = () => sessionStorage.removeItem(OAUTH_ACCOUNTS
 
 export const saveOAuth2TokenSet = (tokens: OAuth2TokenSet) => {
   localStorage.setItem(OAUTH2_TOKEN_KEY, JSON.stringify(tokens));
+  localStorage.setItem(AUTH_TOKEN_KEY, tokens.accessToken);
 };
 
 export const loadOAuth2TokenSet = (): OAuth2TokenSet | null => {
   try {
     const raw = localStorage.getItem(OAUTH2_TOKEN_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as OAuth2TokenSet;
-    if (parsed.expiresAt && Date.now() >= parsed.expiresAt) {
-      localStorage.removeItem(OAUTH2_TOKEN_KEY);
-      return null;
+    if (raw) {
+      const parsed = JSON.parse(raw) as OAuth2TokenSet;
+      if (parsed.expiresAt && Date.now() >= parsed.expiresAt) {
+        localStorage.removeItem(OAUTH2_TOKEN_KEY);
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        return null;
+      }
+      if (parsed.accessToken) localStorage.setItem(AUTH_TOKEN_KEY, parsed.accessToken);
+      return parsed;
     }
-    return parsed;
+    const plain = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!plain) return null;
+    return {
+      accessToken: plain,
+      tokenType: 'Bearer',
+      expiresAt: Date.now() + 3600 * 1000,
+    };
   } catch {
     return null;
   }
 };
 
-export const clearOAuth2TokenSet = () => localStorage.removeItem(OAUTH2_TOKEN_KEY);
+export const clearOAuth2TokenSet = () => {
+  localStorage.removeItem(OAUTH2_TOKEN_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+};
 
 // ——— PKCE helpers ———
 
@@ -491,6 +507,7 @@ export const fetchOAuth2Accounts = async (accessToken: string): Promise<OAuthAcc
     method: 'GET',
     headers: {
       Authorization: `Bearer ${accessToken}`,
+      'Deriv-App-ID': DERIV_CLIENT_ID,
       'Content-Type': 'application/json',
     },
   });
@@ -532,6 +549,7 @@ export const fetchAuthenticatedWsUrl = async (accessToken: string, accountId: st
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
+        'Deriv-App-ID': DERIV_CLIENT_ID,
         'Content-Type': 'application/json',
       },
     }
@@ -583,9 +601,11 @@ export const parseOAuthAccountsFromLocation = (
 
 export const pickDefaultOAuthAccount = (accounts: OAuthAccount[]): OAuthAccount | null => {
   if (!accounts.length) return null;
-  const real = accounts.find((a) => /^CR/i.test(a.account) && !/^CRW/i.test(a.account));
+  const real = accounts.find(
+    (a) => /^(CR|ROT)/i.test(a.account) && !/^(VR|DOT|VRTC|VRW)/i.test(a.account)
+  );
   if (real) return real;
-  const demo = accounts.find((a) => /^VRTC/i.test(a.account) || /^VRW/i.test(a.account) || /^VRT/i.test(a.account));
+  const demo = accounts.find((a) => /^(VR|DOT|VRTC|VRW)/i.test(a.account));
   return demo || accounts[0];
 };
 

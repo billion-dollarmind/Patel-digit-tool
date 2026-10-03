@@ -40,6 +40,8 @@ interface PlatformAdminContextValue {
   createSubscriber: (partial?: Partial<SubscriberRecord>) => SubscriberRecord;
   setSubscriberStatus: (id: string, status: SubscriberStatus, featureKeys?: FeatureKey[]) => void;
   grantFeatures: (subscriberId: string, keys: FeatureKey[]) => void;
+  setSubscriberFeature: (subscriberId: string, key: FeatureKey, enabled: boolean) => void;
+  toggleClientVisible: (key: FeatureKey) => void;
   resetPlatform: () => void;
   pushSignalToConnectedApps: (payload: unknown, featureHint?: FeatureKey) => Promise<string[]>;
 }
@@ -153,6 +155,34 @@ export const PlatformAdminProvider = ({ children }: { children: ReactNode }) => 
     []
   );
 
+  const setSubscriberFeature = useCallback((subscriberId: string, key: FeatureKey, enabled: boolean) => {
+    setState((prev) => ({
+      ...prev,
+      subscribers: prev.subscribers.map((s) => {
+        if (s.id !== subscriberId) return s;
+        const has = s.featureKeys.includes(key);
+        return {
+          ...s,
+          featureKeys: enabled
+            ? has
+              ? s.featureKeys
+              : [...s.featureKeys, key]
+            : s.featureKeys.filter((k) => k !== key),
+        };
+      }),
+    }));
+  }, []);
+
+  const toggleClientVisible = useCallback((key: FeatureKey) => {
+    setState((prev) => {
+      const has = prev.clientVisible.includes(key);
+      return {
+        ...prev,
+        clientVisible: has ? prev.clientVisible.filter((k) => k !== key) : [...prev.clientVisible, key],
+      };
+    });
+  }, []);
+
   const grantFeatures = useCallback((subscriberId: string, keys: FeatureKey[]) => {
     setState((prev) => ({
       ...prev,
@@ -201,6 +231,8 @@ export const PlatformAdminProvider = ({ children }: { children: ReactNode }) => 
       createSubscriber,
       setSubscriberStatus,
       grantFeatures,
+      setSubscriberFeature,
+      toggleClientVisible,
       resetPlatform,
       pushSignalToConnectedApps,
     }),
@@ -219,6 +251,8 @@ export const PlatformAdminProvider = ({ children }: { children: ReactNode }) => 
       createSubscriber,
       setSubscriberStatus,
       grantFeatures,
+      setSubscriberFeature,
+      toggleClientVisible,
       resetPlatform,
       pushSignalToConnectedApps,
     ]

@@ -60,7 +60,11 @@ export interface PlatformState {
   applications: ConnectedApplication[];
   plans: AccessPlan[];
   subscribers: SubscriberRecord[];
+  /** Pages and apps shown on the client site. Engine and trading apps stay off unless switched on here. */
+  clientVisible: FeatureKey[];
 }
+
+export const DEFAULT_CLIENT_VISIBLE: FeatureKey[] = ['even_odd', 'over_under', 'digit_match'];
 
 export const FEATURE_CATALOG: FeatureDef[] = [
   { id: 'even_odd', label: 'Even / Odd Signals', description: 'Scanner tab for even/odd', route: '/signals/even-odd' },
@@ -169,6 +173,7 @@ export const createDefaultPlatformState = (): PlatformState => {
         approvedAt: t,
       },
     ],
+    clientVisible: DEFAULT_CLIENT_VISIBLE,
   };
 };
 
@@ -181,10 +186,12 @@ export const loadPlatformState = (): PlatformState => {
       return fresh;
     }
     const parsed = JSON.parse(raw) as PlatformState;
+    const defaults = createDefaultPlatformState();
     return {
-      applications: parsed.applications?.length ? parsed.applications : createDefaultPlatformState().applications,
-      plans: parsed.plans?.length ? parsed.plans : createDefaultPlatformState().plans,
-      subscribers: parsed.subscribers?.length ? parsed.subscribers : createDefaultPlatformState().subscribers,
+      applications: parsed.applications?.length ? parsed.applications : defaults.applications,
+      plans: parsed.plans?.length ? parsed.plans : defaults.plans,
+      subscribers: parsed.subscribers?.length ? parsed.subscribers : defaults.subscribers,
+      clientVisible: Array.isArray(parsed.clientVisible) ? parsed.clientVisible : defaults.clientVisible,
     };
   } catch {
     return createDefaultPlatformState();

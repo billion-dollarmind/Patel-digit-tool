@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, KeyRound, Shield, Zap } from 'lucide-react';
+import { Eye, EyeOff, Shield, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -19,21 +19,11 @@ const signalChips = [
 
 export const PasswordGate = ({ onAuthenticated }: PasswordGateProps) => {
   const {
-    connectAndVerify,
     loginWithDerivOAuth,
-    verifyStake,
-    verifySymbol,
     verifying,
-    appId,
-    clientId,
-    oauth2Enabled,
-    redirectUri,
   } = useDerivAccount();
   const [password, setPassword] = useState('');
-  const [derivToken, setDerivToken] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showToken, setShowToken] = useState(false);
-  const [runVerifyTrade, setRunVerifyTrade] = useState(true);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -54,23 +44,6 @@ export const PasswordGate = ({ onAuthenticated }: PasswordGateProps) => {
     }
 
     localStorage.setItem('patel-digit-tool-auth', 'true');
-
-    if (derivToken.trim()) {
-      setStatus(
-        runVerifyTrade
-          ? `Authorizing + $${verifyStake} ${verifySymbol} DIGITODD verification…`
-          : 'Connecting Deriv account…'
-      );
-      const result = await connectAndVerify(derivToken, runVerifyTrade);
-      if (!result.ok) {
-        setError(result.message);
-        setIsLoading(false);
-        setStatus('');
-        return;
-      }
-      setStatus(result.message);
-    }
-
     onAuthenticated();
     setIsLoading(false);
   };
@@ -82,7 +55,7 @@ export const PasswordGate = ({ onAuthenticated }: PasswordGateProps) => {
       return;
     }
     localStorage.setItem('patel-digit-tool-auth', 'true');
-    void loginWithDerivOAuth({ verifyAfter: runVerifyTrade, returnTo: '/' }).catch((err) => {
+    void loginWithDerivOAuth({ verifyAfter: true, returnTo: '/' }).catch((err) => {
       setError(err instanceof Error ? err.message : 'Failed to start Deriv OAuth');
     });
   };
@@ -192,57 +165,8 @@ export const PasswordGate = ({ onAuthenticated }: PasswordGateProps) => {
                   disabled={busy || !password}
                   className="w-full h-12 text-base font-semibold bg-[#ff444f] hover:bg-[#ff5c65] text-white border-0"
                 >
-                  {oauth2Enabled ? 'Login with Deriv OAuth2' : 'Login with Deriv (legacy)'}
+                  Login with Deriv
                 </Button>
-
-                <div className="relative py-1">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-border/60" />
-                  </div>
-                  <div className="relative flex justify-center text-[10px] uppercase tracking-wider">
-                    <span className="bg-card/80 px-2 text-muted-foreground">or paste token</span>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5">
-                    <KeyRound className="w-3 h-3" />
-                    Deriv API token (manual)
-                  </label>
-                  <div className="relative">
-                    <Input
-                      type={showToken ? 'text' : 'password'}
-                      placeholder="Paste token (optional)"
-                      value={derivToken}
-                      onChange={(e) => setDerivToken(e.target.value)}
-                      className="h-11 pr-12 text-sm bg-background/60 border-cyan-500/25 font-mono"
-                      disabled={busy}
-                      autoComplete="off"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowToken(!showToken)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-cyan-300"
-                      disabled={busy}
-                      aria-label={showToken ? 'Hide token' : 'Show token'}
-                    >
-                      {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <label className="flex items-start gap-2 text-[11px] text-muted-foreground pt-1 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={runVerifyTrade}
-                      onChange={(e) => setRunVerifyTrade(e.target.checked)}
-                      className="mt-0.5 rounded border-cyan-500/40"
-                      disabled={busy}
-                    />
-                    <span>
-                      After connect, run verification: <strong>${verifyStake}</strong> DIGITODD on{' '}
-                      <strong>{verifySymbol}</strong>
-                    </span>
-                  </label>
-                </div>
 
                 {error && (
                   <div className="text-destructive text-sm text-center bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2">
@@ -273,28 +197,6 @@ export const PasswordGate = ({ onAuthenticated }: PasswordGateProps) => {
                   )}
                 </Button>
               </form>
-
-              <p className="text-center text-[11px] text-muted-foreground leading-relaxed">
-                {oauth2Enabled ? (
-                  <>
-                    OAuth2 client_id{' '}
-                    <span className="font-mono text-cyan-300/90">{clientId}</span>
-                    <br />
-                    Legacy app_id <span className="font-mono text-cyan-300/90">{appId}</span>
-                  </>
-                ) : (
-                  <>
-                    OAuth app_id <span className="font-mono text-cyan-300/90">{appId}</span>
-                    <br />
-                    <span className="text-amber-300/90">
-                      Set VITE_DERIV_CLIENT_ID for OAuth 2.0 + PKCE
-                    </span>
-                  </>
-                )}
-                <br />
-                Redirect{' '}
-                <span className="font-mono text-[10px] break-all text-cyan-300/80">{redirectUri}</span>
-              </p>
             </div>
           </motion.div>
         </motion.div>

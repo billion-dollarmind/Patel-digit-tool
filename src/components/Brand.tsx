@@ -1,4 +1,6 @@
+import { useRef, useState, type MouseEvent } from 'react';
 import { cn } from '@/lib/utils';
+import { AdminUnlockDialog } from '@/components/AdminUnlockDialog';
 
 interface BrandLogoProps {
   className?: string;
@@ -13,23 +15,48 @@ const sizeMap = {
   xl: 'w-16 h-16',
 };
 
-export const BrandLogo = ({ className, size = 'md', showGlow = true }: BrandLogoProps) => (
-  <div
-    className={cn(
-      'relative shrink-0 rounded-xl overflow-hidden border border-cyan-400/30 bg-black/40',
-      showGlow && 'shadow-lg shadow-cyan-500/25',
-      sizeMap[size],
-      className
-    )}
-  >
-    <img
-      src="/brand/logo-icon.png"
-      alt="Patel Digit Tool"
-      className="h-full w-full object-cover"
-      draggable={false}
-    />
-  </div>
-);
+export const BrandLogo = ({ className, size = 'md', showGlow = true }: BrandLogoProps) => {
+  const [adminOpen, setAdminOpen] = useState(false);
+  const taps = useRef(0);
+  const firstTapAt = useRef(0);
+
+  const onLogoClick = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const now = Date.now();
+    if (now - firstTapAt.current > 1500) taps.current = 0;
+    if (taps.current === 0) firstTapAt.current = now;
+    taps.current += 1;
+    if (taps.current >= 3) {
+      taps.current = 0;
+      setAdminOpen(true);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onLogoClick}
+        aria-label="Patel Digit Tool"
+        className={cn(
+          'relative shrink-0 rounded-xl overflow-hidden border border-cyan-400/30 bg-black/40 p-0',
+          showGlow && 'shadow-lg shadow-cyan-500/25',
+          sizeMap[size],
+          className
+        )}
+      >
+        <img
+          src="/brand/logo-icon.png"
+          alt=""
+          className="h-full w-full object-cover pointer-events-none"
+          draggable={false}
+        />
+      </button>
+      <AdminUnlockDialog open={adminOpen} onOpenChange={setAdminOpen} />
+    </>
+  );
+};
 
 interface SiteBackgroundProps {
   variant?: 'main' | 'auth';

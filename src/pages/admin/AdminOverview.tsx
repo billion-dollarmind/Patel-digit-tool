@@ -1,9 +1,12 @@
 import { Link } from 'react-router-dom';
 import { usePlatformAdmin } from '@/context/PlatformAdminContext';
+import { useDerivAccount } from '@/context/DerivAccountContext';
 import { FEATURE_CATALOG } from '@/lib/platformAdmin';
 
 export const AdminOverview = () => {
-  const { state, activeSubscriberId, activeFeatures, setActiveSubscriber } = usePlatformAdmin();
+  const { state, activeSubscriberId, activeFeatures, setActiveSubscriber, toggleClientVisible } =
+    usePlatformAdmin();
+  const { account, verified, lastVerification, clientId, appId, redirectUri } = useDerivAccount();
   const approved = state.subscribers.filter((s) => s.status === 'approved').length;
   const pending = state.subscribers.filter((s) => s.status === 'pending').length;
   const activeApps = state.applications.filter((a) => a.active).length;
@@ -67,23 +70,51 @@ export const AdminOverview = () => {
         </div>
       </section>
 
-      <section className="glass rounded-2xl p-5 text-sm text-muted-foreground space-y-2">
-        <h2 className="font-semibold text-foreground">How this mirrors Subscriber Hub</h2>
-        <ul className="list-disc pl-5 space-y-1">
-          <li>
-            <strong>Applications</strong> — register connected products, feature keys, domains, webhooks
-          </li>
-          <li>
-            <strong>Scanner Access</strong> — approve users onto a plan and unlock tabs
-          </li>
-          <li>
-            <strong>Subscribers</strong> — pending / approved / revoked access records
-          </li>
-          <li>
-            Data is stored locally in this browser (no Hub API). Point webhooks at your own workers to
-            push live signals outward.
-          </li>
-        </ul>
+      <section className="glass rounded-2xl p-5 space-y-3">
+        <h2 className="font-semibold">Client menu</h2>
+        <p className="text-sm text-muted-foreground">
+          Master switches for what clients can open. Off hides the page even if a plan includes it.
+          Engine and trading apps stay off for clients until you turn them on.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {FEATURE_CATALOG.map((f) => {
+            const on = state.clientVisible.includes(f.id);
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => toggleClientVisible(f.id)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                  on
+                    ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200'
+                    : 'border-border text-muted-foreground'
+                }`}
+              >
+                {f.label}: {on ? 'Shown' : 'Hidden'}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="glass rounded-2xl p-5 space-y-2 text-sm">
+        <h2 className="font-semibold">Deriv connection</h2>
+        {account ? (
+          <p>
+            Connected <span className="font-mono text-cyan-300">{account.loginid}</span> · {account.balance}{' '}
+            {account.currency} · {verified ? 'verification trade succeeded' : 'not verified'}
+          </p>
+        ) : (
+          <p className="text-muted-foreground">No Deriv account connected in this browser.</p>
+        )}
+        {lastVerification && (
+          <p className="text-xs text-muted-foreground">{lastVerification.message}</p>
+        )}
+        <p className="text-[11px] text-muted-foreground font-mono break-all">
+          client_id {clientId} · app_id {appId}
+          <br />
+          redirect {redirectUri}
+        </p>
       </section>
     </div>
   );

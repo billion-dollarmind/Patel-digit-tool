@@ -308,15 +308,6 @@ export const DerivAccountProvider = ({ children }: { children: ReactNode }) => {
         const intent = loadOAuthIntent();
         const verifyAfter = opts?.verifyAfter ?? intent?.verifyAfter ?? true;
 
-        if (accounts.length > 1 && !opts?.selectedAccountId) {
-          const pending: VerificationResult = {
-            ok: true,
-            message: `Select one of ${accounts.length} accounts`,
-          };
-          setLastVerification(pending);
-          return pending;
-        }
-
         const selected =
           accounts.find((a) => a.account === opts?.selectedAccountId) ||
           pickDefaultOAuthAccount(accounts);

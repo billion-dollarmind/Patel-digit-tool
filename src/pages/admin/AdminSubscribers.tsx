@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { usePlatformAdmin } from '@/context/PlatformAdminContext';
+import { FEATURE_CATALOG, type FeatureKey } from '@/lib/platformAdmin';
 
 export const AdminSubscribers = () => {
   const {
@@ -9,6 +10,7 @@ export const AdminSubscribers = () => {
     setSubscriberStatus,
     removeSubscriber,
     resetPlatform,
+    setSubscriberFeature,
   } = usePlatformAdmin();
 
   return (
@@ -52,14 +54,23 @@ export const AdminSubscribers = () => {
                     </span>
                   </p>
                   <div className="flex flex-wrap gap-1 mt-2">
-                    {s.featureKeys.map((k) => (
-                      <span
-                        key={k}
-                        className="text-[10px] rounded-full border border-border px-2 py-0.5 text-muted-foreground"
-                      >
-                        {k}
-                      </span>
-                    ))}
+                    {FEATURE_CATALOG.map((f) => {
+                      const on = s.featureKeys.includes(f.id as FeatureKey);
+                      return (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => setSubscriberFeature(s.id, f.id, !on)}
+                          className={`text-[10px] rounded-full border px-2 py-0.5 ${
+                            on
+                              ? 'border-cyan-400/40 bg-cyan-500/10 text-cyan-200'
+                              : 'border-border text-muted-foreground'
+                          }`}
+                        >
+                          {f.id}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">

@@ -1,5 +1,5 @@
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { ArrowLeft, LayoutGrid, ShieldCheck, Users, Boxes } from 'lucide-react';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { ArrowLeft, LayoutGrid, ShieldCheck, Users, Boxes, Radio, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BrandLogo, SiteBackground } from '@/components/Brand';
 import { cn } from '@/lib/utils';
@@ -9,6 +9,8 @@ const nav = [
   { to: '/admin/apps', label: 'Applications', icon: Boxes },
   { to: '/admin/access', label: 'Scanner Access', icon: ShieldCheck },
   { to: '/admin/subscribers', label: 'Subscribers', icon: Users },
+  { to: '/admin/engine', label: 'Auto Engine', icon: Radio },
+  { to: '/admin/trading', label: 'Trading apps', icon: Bot },
 ];
 
 export const AdminLayout = () => {
@@ -32,9 +34,6 @@ export const AdminLayout = () => {
               </p>
             </div>
           </div>
-          <Link to="/engine" className="text-xs text-cyan-300 hover:underline">
-            Open Auto Engine →
-          </Link>
         </div>
         <nav className="container mx-auto px-4 pb-3 flex flex-wrap gap-2">
           {nav.map((item) => (

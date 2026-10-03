@@ -1,19 +1,26 @@
-import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, Cpu, LogOut, KeyRound, Shield } from 'lucide-react';
+import { ArrowRight, LogOut, KeyRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { useAuth } from '@/hooks/useAuth';
 import { BrandLogo, SiteBackground } from '@/components/Brand';
 import { useDerivAccount } from '@/context/DerivAccountContext';
-import { useSignalEngine } from '@/context/SignalEngineContext';
-import { CONNECTED_APPS } from '@/lib/signalDispatcher';
+import { usePlatformAdmin } from '@/context/PlatformAdminContext';
+import type { FeatureKey } from '@/lib/platformAdmin';
 
-const featuredSignals = [
+const featuredSignals: Array<{
+  feature: FeatureKey;
+  title: string;
+  description: string;
+  route: string;
+  image: string;
+  accent: string;
+  glow: string;
+}> = [
   {
+    feature: 'even_odd',
     title: 'Even/Odd Signals',
     description: 'Predict whether the last digit will be even or odd from live pattern analysis.',
     route: '/signals/even-odd',
@@ -22,6 +29,7 @@ const featuredSignals = [
     glow: 'shadow-cyan-500/20 hover:shadow-cyan-400/40',
   },
   {
+    feature: 'over_under',
     title: 'Over/Under Signals',
     description: 'Predict high (5–9) or low (0–4) digits with recommended entry runs.',
     route: '/signals/over-under',
@@ -30,6 +38,7 @@ const featuredSignals = [
     glow: 'shadow-sky-500/20 hover:shadow-sky-400/40',
   },
   {
+    feature: 'digit_match',
     title: 'Digit Match Signals',
     description: 'Identify the most frequent digit for match predictions across all indices.',
     route: '/signals/digit-match',
@@ -46,28 +55,16 @@ export const Dashboard = () => {
     account,
     verified,
     verifying,
-    connectAndVerify,
     loginWithDerivOAuth,
     switchOAuthAccount,
     oauthAccounts,
     disconnectAccount,
-    verifyStake,
-    verifySymbol,
     error: derivError,
-    appId,
-    clientId,
-    oauth2Enabled,
-    redirectUri,
   } = useDerivAccount();
-  const { running, settings, recentSignals } = useSignalEngine();
-  const [tokenInput, setTokenInput] = useState('');
-  const [runVerify, setRunVerify] = useState(true);
-
-  const handleConnect = async () => {
-    if (!tokenInput.trim()) return;
-    await connectAndVerify(tokenInput, runVerify);
-    setTokenInput('');
-  };
+  const { state, hasFeature } = usePlatformAdmin();
+  const visibleSignals = featuredSignals.filter(
+    (signal) => state.clientVisible.includes(signal.feature) && hasFeature(signal.feature)
+  );
 
   return (
     <div className="relative min-h-screen">
@@ -86,7 +83,7 @@ export const Dashboard = () => {
               <div>
                 <h1 className="text-lg font-bold gradient-text">Patel Digit Tool</h1>
                 <p className="text-xs text-muted-foreground">
-                  {running ? `Engine live · ${settings.strategyMode}` : 'Choose signal or launch apps'}
+                  Choose a signal
                 </p>
               </div>
             </div>
@@ -117,12 +114,17 @@ export const Dashboard = () => {
             Select Signal Type
           </h2>
           <p className="text-muted-foreground max-w-lg mx-auto">
-            Real-time AI-assisted predictions — or start Auto Engine to push into connected apps.
+            Real-time AI-assisted predictions for the markets you can open.
           </p>
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 max-w-6xl mx-auto">
-          {featuredSignals.map((signal, index) => (
+          {visibleSignals.length === 0 && (
+            <p className="text-center text-sm text-muted-foreground col-span-full">
+              No signal pages are open for this account.
+            </p>
+          )}
+          {visibleSignals.map((signal, index) => (
             <motion.button
               key={signal.route}
               type="button"
@@ -163,52 +165,7 @@ export const Dashboard = () => {
           ))}
         </div>
 
-        {/* Auto Engine + Deriv */}
-        <section className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-5">
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="glass rounded-2xl p-5 space-y-4"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <Cpu className="w-4 h-4 text-cyan-400" />
-                  Auto Engine / Dispatcher
-                </h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {running
-                    ? `Running · ${recentSignals.length} recent dispatches`
-                    : 'Stopped — start to push Even/Odd, Over/Under, Digit Match to apps'}
-                </p>
-              </div>
-              <Button onClick={() => navigate('/engine')}>Open Monitor</Button>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="glass rounded-2xl p-5 space-y-3"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-emerald-400" />
-                  Admin + connected apps
-                </h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Hub-style applications, scanner access, and subscriber approvals
-                </p>
-              </div>
-              <Button variant="outline" onClick={() => navigate('/admin')}>
-                Open Admin
-              </Button>
-            </div>
-          </motion.div>
-        </section>
-
-        <section className="max-w-6xl mx-auto grid lg:grid-cols-1 gap-5">
+        <section className="max-w-6xl mx-auto grid gap-5">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -272,85 +229,15 @@ export const Dashboard = () => {
               <div className="space-y-2">
                 <Button
                   className="w-full bg-[#ff444f] hover:bg-[#ff5c65] text-white"
-                  onClick={() => void loginWithDerivOAuth({ verifyAfter: runVerify, returnTo: '/' })}
+                  onClick={() => void loginWithDerivOAuth({ verifyAfter: true, returnTo: '/' })}
                   disabled={verifying}
                 >
-                  {oauth2Enabled ? 'Login with Deriv OAuth2' : 'Login with Deriv (legacy)'}
+                  Login with Deriv
                 </Button>
-                <div className="relative py-1">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-border/50" />
-                  </div>
-                  <div className="relative flex justify-center text-[10px] uppercase">
-                    <span className="bg-card/80 px-2 text-muted-foreground">or paste</span>
-                  </div>
-                </div>
-                <Input
-                  type="password"
-                  placeholder="Deriv API token"
-                  value={tokenInput}
-                  onChange={(e) => setTokenInput(e.target.value)}
-                  className="font-mono text-sm"
-                />
-                <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={runVerify}
-                    onChange={(e) => setRunVerify(e.target.checked)}
-                  />
-                  Verify with ${verifyStake} DIGITODD on {verifySymbol}
-                </label>
                 {derivError && <p className="text-xs text-destructive">{derivError}</p>}
-                <Button onClick={handleConnect} disabled={verifying || !tokenInput.trim()}>
-                  {verifying ? 'Verifying…' : 'Connect & verify'}
-                </Button>
-                <p className="text-[10px] text-muted-foreground leading-relaxed">
-                  {oauth2Enabled ? (
-                    <>
-                      client_id <span className="font-mono">{clientId}</span> · app_id{' '}
-                      <span className="font-mono">{appId}</span>
-                    </>
-                  ) : (
-                    <>
-                      app_id <span className="font-mono">{appId}</span> · set{' '}
-                      <span className="font-mono">VITE_DERIV_CLIENT_ID</span> for OAuth2
-                    </>
-                  )}
-                  <br />
-                  redirect <span className="font-mono break-all">{redirectUri}</span>
-                </p>
               </div>
             )}
           </motion.div>
-        </section>
-
-        {/* Connected apps */}
-        <section className="max-w-6xl mx-auto space-y-4">
-          <div className="text-center">
-            <h3 className="text-2xl font-bold">Connected trading apps</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              Downstream products that receive dispatcher signals and can execute trades
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-3 gap-4">
-            {CONNECTED_APPS.map((app, i) => (
-              <motion.button
-                key={app.id}
-                type="button"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.08 * i }}
-                onClick={() => navigate(app.route)}
-                className="glass rounded-2xl p-5 text-left border border-white/10 hover:border-cyan-400/40 transition-colors"
-              >
-                <h4 className="font-semibold text-foreground">{app.name}</h4>
-                <p className="text-sm text-muted-foreground mt-2">{app.description}</p>
-                <span className="inline-flex items-center gap-1 text-sm text-cyan-300 mt-4 font-medium">
-                  Open app <ArrowRight className="w-3.5 h-3.5" />
-                </span>
-              </motion.button>
-            ))}
-          </div>
         </section>
       </main>
     </div>

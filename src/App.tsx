@@ -24,13 +24,17 @@ import { AccumulatorsApp } from "./pages/apps/AccumulatorsApp";
 import { BotBuilderApp } from "./pages/apps/BotBuilderApp";
 import { OAuthCallback } from "./pages/OAuthCallback";
 import { AdminLayout } from "./pages/admin/AdminLayout";
+import { isAdminUnlocked } from "@/lib/adminGate";
 import { AdminOverview } from "./pages/admin/AdminOverview";
 import { AdminApps } from "./pages/admin/AdminApps";
 import { AdminAccess } from "./pages/admin/AdminAccess";
 import { AdminSubscribers } from "./pages/admin/AdminSubscribers";
+import { AdminTrading } from "./pages/admin/AdminTrading";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+
+const AdminRoute = () => (isAdminUnlocked() ? <AdminLayout /> : <Navigate to="/" replace />);
 
 const AuthenticatedApp = () => (
   <PlatformAdminProvider>
@@ -97,11 +101,13 @@ const AuthenticatedApp = () => (
         />
         <Route path="/speed-bot" element={<Navigate to="/apps/speedbot" replace />} />
 
-        <Route path="/admin" element={<AdminLayout />}>
+        <Route path="/admin" element={<AdminRoute />}>
           <Route index element={<AdminOverview />} />
           <Route path="apps" element={<AdminApps />} />
           <Route path="access" element={<AdminAccess />} />
           <Route path="subscribers" element={<AdminSubscribers />} />
+          <Route path="engine" element={<EngineMonitor />} />
+          <Route path="trading" element={<AdminTrading />} />
         </Route>
 
         <Route path="*" element={<NotFound />} />
